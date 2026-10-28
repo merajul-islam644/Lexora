@@ -1,19 +1,17 @@
-/* The SPA's data layer. Every schema read/write goes STRAIGHT to the SELISE
- * Blocks Data Gateway through the SDK (@seliseblocks/client data API) with
- * the signed-in user's own token -- no relay for data anymore. The lexora-api
- * Blocks Function is called ONLY for what cannot leave the server: the avatar
- * endpoints (storage presign, short-lived download URLs, file trash -- those
- * run on the function's own identity).
+/* The SPA's data layer. Everything -- schema reads/writes AND avatar file
+ * storage -- goes STRAIGHT to the SELISE Blocks APIs through the SDK
+ * (@seliseblocks/client) with the signed-in user's own token. There is no
+ * backend of ours at all: data hits the Data Gateway, avatar presign,
+ * short-lived download URLs and file trash hit Blocks Data Storage.
  *
  * Domain logic (tenant guard, permissions, import/export, the practice SRS,
- * the generation runner) is the same core code the function used -- it now
- * runs in the browser against the same DataStore seam (core/db/blocksStore).
- * The old JSON error contract { error: { code, message, details } } is kept
- * as ApiError, so pages see exactly what they always did. */
+ * the generation runner) runs in the browser against the same DataStore seam
+ * (core/db/blocksStore). The old JSON error contract
+ * { error: { code, message, details } } is kept as ApiError, so pages see
+ * exactly what they always did. */
 
-import { BlocksApiError, BlocksFunctionRunError } from "@seliseblocks/client";
+import { BlocksApiError } from "@seliseblocks/client";
 import { blocksClient } from "./lib/blocks/client.js";
-import { blocksConfig } from "./lib/blocks/config.js";
 import { blocksStore } from "../core/db/blocksStore.js";
 import type { DataStore } from "../core/db/store.js";
 import { toEntryDTO, type EntryRow, type LanguageRow } from "../core/db/rows.js";
@@ -71,6 +69,8 @@ import {
   translateSchema,
   phrasebookAddSchema,
   practiceReviewSchema,
+  avatarSchema,
+  avatarUploadSchema,
   PRACTICE_MODES as SCHEMA_PRACTICE_MODES,
   type WorkspaceRole,
 } from "../shared/schemas.js";
@@ -127,6 +127,10 @@ function apiErrorFrom(status: number, body: unknown): ApiError {
  * browser's own SDK client: every row read/write is a Gateway call made as
  * the signed-in user. */
 const store: DataStore = blocksStore(() => blocksClient);
+/** Avatar file storage: presign, short-lived download URLs and trash -- the
+ * same calls the function made, now with the browser's own token (the one
+ * that always carried the storage permissions). */
+const files = blocksClient.data.files;
 
 /** Fire-and-forget scheduler. The function had ctx.waitUntil; a browser tab
  * keeps its own promises alive, so a plain catch-all is the equivalent.
@@ -1092,6 +1096,141 @@ function flat(query: Record<string, string | string[]>): Record<string, string> 
   return out;
 }
 
+/* --------------------------- avatar (file storage) ------------------------- */
+/* Port of the function's last surface: presign, short-lived download URLs and
+   file trash, made with the caller's own token. The avatar pointer lives in
+   the UserProfile schema (keyed by lowercase email). */
+
+const AVATAR_STORAGE_CONFIG = "Default";
+
+/** Storage file extension per accepted image type -- presign requires a
+ *  name with an allowed extension (blocks-data-storage skill). */
+const AVATAR_EXTENSIONS = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" } as const;
+
+/** GET me/avatar -- the caller's avatar: the Blocks Data file id plus a fresh
+ *  short-lived download URL. Download URLs expire, so this is re-fetched per
+ *  page load. */
+async function getAvatar(): Promise<unknown> {
+  const { email } = await identity();
+  const fileId = await store.getAvatarFileId(email);
+  if (!fileId) return { fileId: null, downloadUrl: null };
+  try {
+    const res = await files.get(fileId, { configurationName: AVATAR_STORAGE_CONFIG });
+    return { fileId, downloadUrl: pickFileUrl(res) };
+  } catch {
+    return { fileId, downloadUrl: null };
+  }
+}
+
+/** POST me/avatar/upload-url -- pre-signed upload URL. Returns
+ *  { uploadUrl, fileId, requiredHeaders }; the page PUTs the bytes straight
+ *  to Azure (with those headers) and then PATCHes the pointer. Private
+ *  access modifier, 5 MB cap enforced client-side. */
+async function createAvatarUploadUrl(body: unknown): Promise<unknown> {
+  const parsed = parseBody(avatarUploadSchema, body);
+  // Storage errors carry the gateway's own reason (BlocksApiError.message) —
+  // surface it instead of a blind 500 so failures diagnose themselves.
+  let res: unknown;
+  try {
+    const { email } = await identity();
+    res = await files.presignedUploadUrl({
+      name: `avatar-${email.split("@")[0]}-${Date.now()}.${AVATAR_EXTENSIONS[parsed.contentType]}`,
+      configurationName: AVATAR_STORAGE_CONFIG,
+      accessModifier: "Private",
+      contentType: parsed.contentType
+    });
+  } catch (e) {
+    const reason = e instanceof Error && e.message ? e.message : "unknown storage error";
+    throw badRequest(`Storage presign failed: ${reason.slice(0, 300)}. Please try again.`);
+  }
+  const found = extractPresign(res);
+  if (!found.uploadUrl || !found.fileId) {
+    throw badRequest(`Storage presign failed: ${describePresignFailure(res)}. Please try again.`);
+  }
+  return { uploadUrl: found.uploadUrl, fileId: found.fileId, requiredHeaders: found.requiredHeaders ?? {} };
+}
+
+/** The presign payload has appeared top-level and nested under `data` on
+ *  different endpoints — walk a few levels and take the fields by name,
+ *  including the requiredHeaders the provider expects on the PUT. */
+function extractPresign(res: unknown, depth = 0): {
+  uploadUrl?: string;
+  fileId?: string;
+  requiredHeaders?: Record<string, string>;
+} {
+  if (!res || typeof res !== "object" || depth > 3) return {};
+  const out: { uploadUrl?: string; fileId?: string; requiredHeaders?: Record<string, string> } = {};
+  for (const [key, value] of Object.entries(res as Record<string, unknown>)) {
+    if (typeof value === "string") {
+      if ((key === "uploadUrl" || key === "preSignedUrl" || key === "url") && !out.uploadUrl) out.uploadUrl = value;
+      if (key === "fileId" && !out.fileId) out.fileId = value;
+    } else if (value && typeof value === "object") {
+      if (key === "requiredHeaders" && !out.requiredHeaders) {
+        const entries = Object.entries(value as Record<string, unknown>).flatMap(([name, v]) =>
+          typeof v === "string" ? [[name, v] as const] : []
+        );
+        if (entries.length > 0) out.requiredHeaders = Object.fromEntries(entries);
+      }
+      const nested = extractPresign(value, depth + 1);
+      out.uploadUrl = out.uploadUrl ?? nested.uploadUrl;
+      out.fileId = out.fileId ?? nested.fileId;
+      out.requiredHeaders = out.requiredHeaders ?? nested.requiredHeaders;
+    }
+  }
+  return out;
+}
+
+/** Human-readable reason from a failed presign envelope: the gateway's own
+ *  `errors` when isSuccess=false, otherwise the top-level keys (the envelope
+ *  shape has drifted before) — never the signed values themselves. */
+function describePresignFailure(res: unknown): string {
+  if (!res || typeof res !== "object") return "empty storage response";
+  const r = res as Record<string, unknown>;
+  if (r.isSuccess === false && r.errors) {
+    const detail = typeof r.errors === "string" ? r.errors : JSON.stringify(r.errors);
+    if (detail && detail !== "{}") return detail.slice(0, 300);
+  }
+  const keys = Object.keys(r).join(", ");
+  return `unrecognized response (keys: ${keys || "none"})`;
+}
+
+/** PATCH me/avatar -- store the file id of the caller's freshly uploaded
+ *  avatar, trashing the previous file (best-effort). */
+async function setAvatar(body: unknown): Promise<unknown> {
+  const { email } = await identity();
+  const parsed = parseBody(avatarSchema, body);
+  const fileId = parsed.fileId.trim();
+  const previousFileId = await store.getAvatarFileId(email);
+  await store.setAvatarFileId(email, fileId);
+  if (previousFileId && previousFileId !== fileId) {
+    await files.delete({ fileId: previousFileId, permanent: false }).catch(() => undefined);
+  }
+  return { fileId };
+}
+
+/** DELETE me/avatar -- clear the pointer and trash the file (best-effort). */
+async function deleteAvatar(): Promise<unknown> {
+  const { email } = await identity();
+  const previousFileId = await store.getAvatarFileId(email);
+  await store.setAvatarFileId(email, "");
+  if (previousFileId) {
+    await files.delete({ fileId: previousFileId, permanent: false }).catch(() => undefined);
+  }
+  return { fileId: null };
+}
+
+/** First URL-shaped field in the untyped files.get payload. */
+function pickFileUrl(res: unknown): string | null {
+  for (const cand of [(res as Record<string, unknown>)?.data, res]) {
+    if (!cand || typeof cand !== "object") continue;
+    for (const key of ["fileUrl", "downloadUrl", "url", "presignedUrl", "link"]) {
+      const v = (cand as Record<string, unknown>)[key];
+      if (typeof v === "string" && v) return v;
+    }
+  }
+  return null;
+}
+
 /** The route table the function used to own, now resolved locally against the
  * Gateway. Paths are the same ones the pages always called. */
 async function localRoute(
@@ -1104,6 +1243,17 @@ async function localRoute(
 
   if (head === "me" && segs.length === 1) {
     if (method === "GET") return getMe();
+    throw methodNotAllowed();
+  }
+
+  if (head === "me" && second === "avatar") {
+    if (third === "upload-url") {
+      if (method === "POST") return createAvatarUploadUrl(body);
+      throw methodNotAllowed();
+    }
+    if (method === "GET") return getAvatar();
+    if (method === "PATCH") return setAvatar(body);
+    if (method === "DELETE") return deleteAvatar();
     throw methodNotAllowed();
   }
 
@@ -1251,65 +1401,6 @@ async function routeLanguage(
 const methodNotAllowed = () =>
   new HttpError(405, "Method not allowed for this route", "method_not_allowed");
 
-/* --------------------- the function's remaining surface -------------------- */
-
-/** Avatar routes only: presign, download URLs and file trash run on the
- * FUNCTION's identity -- the browser token has no storage permissions. */
-async function fnInvoke<T>(
-  method: string,
-  path: string,
-  query: Record<string, string>,
-  body?: unknown,
-): Promise<T> {
-  try {
-    const result = await blocksClient.logic.functions.invoke<T>(
-      blocksConfig.apiFunctionId,
-      {
-        method: method as "GET",
-        path,
-        query,
-        body,
-        waitSeconds: 25,
-      },
-    );
-    if (result.kind === "answered")
-      return unwrapFn<T>(result.status, result.body);
-    // A call that outlived the wait: the run still finishes -- collect it.
-    const done = await blocksClient.logic.functions.waitForResult(
-      { runId: result.runId, pollToken: result.pollToken ?? "" },
-      { timeoutMs: 120_000 },
-    );
-    if (done.status !== "SUCCEEDED") {
-      throw new ApiError(
-        502,
-        "function_run_failed",
-        done.errorMessage ?? "The request did not finish. Please try again.",
-      );
-    }
-    return unwrapFn<T>(200, done.result ? JSON.parse(done.result) : {});
-  } catch (err) {
-    if (err instanceof ApiError) throw err;
-    if (err instanceof BlocksApiError) throw apiErrorFrom(err.status, err.body);
-    if (err instanceof BlocksFunctionRunError) {
-      throw new ApiError(
-        502,
-        "function_run_failed",
-        err.errorMessage ?? err.message,
-      );
-    }
-    throw new ApiError(
-      0,
-      "network",
-      err instanceof Error ? err.message : "Could not reach the API",
-    );
-  }
-}
-
-function unwrapFn<T>(status: number, body: unknown): T {
-  if (status >= 400) throw apiErrorFrom(status, body);
-  return body as T;
-}
-
 async function request<T>(
   method: string,
   path: string,
@@ -1317,11 +1408,6 @@ async function request<T>(
 ): Promise<T> {
   const { path: routePath, query } = splitPath(path);
   const segs = routePath.split("/").filter(Boolean);
-
-  // Only the avatar endpoints still leave the browser.
-  if (segs[0] === "me" && segs[1] === "avatar") {
-    return fnInvoke<T>(method, routePath, flat(query), body);
-  }
 
   try {
     return (await localRoute(method, segs, flat(query), body ?? {})) as T;

@@ -4,6 +4,5 @@ npm-cache/
 .env
 .cert/
 dist-web/
-dist-function/
 data/
 .playwright-mcp/

@@ -6,9 +6,7 @@ export const blocksConfig = {
   oidcScope: (import.meta.env.VITE_BLOCKS_OIDC_SCOPE as string) || "openid profile",
   // This project's tenant id -- sent as the x-blocks-key header on every
   // Blocks API call, and as tenant_id on the OIDC login request.
-  xBlocksKey: import.meta.env.VITE_BLOCKS_X_BLOCKS_KEY as string,
-  // The lexora-api Blocks Function -- the whole backend lives here now.
-  apiFunctionId: (import.meta.env.VITE_LEXORA_API_FUNCTION_ID as string) || ""
+  xBlocksKey: import.meta.env.VITE_BLOCKS_X_BLOCKS_KEY as string
 };
 
 export function isBlocksConfigured(): boolean {
