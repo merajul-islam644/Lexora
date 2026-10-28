@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge, ErrorNote, HonestNote, PageHeader, Spinner } from "../ui.js";
 import { useSession } from "../state.js";
+import { toast } from "sonner";
 import { useBlocksAuth } from "../blocks-auth.js";
 import { blocksClient } from "../lib/blocks/client.js";
 import { api } from "../api.js";
@@ -41,7 +42,7 @@ export function Profile() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    document.title = "Profile — Lexora";
+    document.title = "Profile · Lexora";
   }, []);
 
   // Live IAM reads, scoped to the signed-in user: their roles, permissions
@@ -104,6 +105,7 @@ export function Profile() {
         await api.patch("/api/me/avatar", { fileId: presign.fileId });
         const fresh = await api.get<{ downloadUrl: string | null }>("/api/me/avatar");
         setAvatarUrl(fresh.downloadUrl);
+        toast.success("Profile photo updated.");
       } catch (e) {
         setAvatarError(e instanceof Error ? e.message : "Could not upload the photo.");
       } finally {
@@ -120,6 +122,7 @@ export function Profile() {
       try {
         await api.del("/api/me/avatar");
         setAvatarUrl(null);
+        toast("Profile photo removed.");
       } catch (e) {
         setAvatarError(e instanceof Error ? e.message : "Could not remove the photo.");
       } finally {
@@ -134,11 +137,11 @@ export function Profile() {
     ? new Date(user.createdAt).toLocaleDateString(undefined, {
         year: "numeric", month: "long", day: "numeric"
       })
-    : "—";
+    : "";
 
   return (
     <div>
-      <PageHeader title="Profile" subtitle="Your account — who you are in this app." />
+      <PageHeader title="Profile" subtitle="Your account: who you are in this app." />
 
       <div className="profile-page">
         {/* Identity */}
@@ -206,7 +209,7 @@ export function Profile() {
         <div className="card">
           <h3 className="card-section-title">Platform roles & permissions</h3>
           <p className="card-section-sub">
-            What the SELISE Blocks platform says about your account — read live from IAM.
+            What the SELISE Blocks platform says about your account, read live from IAM.
           </p>
           {iam !== null ? (
             <>
@@ -247,7 +250,7 @@ export function Profile() {
         <div className="card">
           <h3 className="card-section-title">Your workspaces</h3>
           <p className="card-section-sub">
-            {workspaces.length === 1 ? "1 workspace" : `${workspaces.length} workspaces`} — your role here decides what
+            {workspaces.length === 1 ? "1 workspace" : `${workspaces.length} workspaces`}; your role here decides what
             you can change, enforced by the Lexora function on every call.
           </p>
           <div className="profile-rows">
@@ -267,7 +270,7 @@ export function Profile() {
             ))}
             {workspaces.length === 0 && (
               <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>
-                No workspaces yet — create one from the dashboard.
+                No workspaces yet; create one from the dashboard.
               </p>
             )}
           </div>
@@ -307,7 +310,7 @@ export function Profile() {
         <HonestNote>
           <p style={{ margin: 0 }}>
             Your account, platform roles, permissions and organizations are managed by your organisation's SELISE Blocks
-            directory — Lexora keeps no password and no editable profile. Workspace roles are Lexora's own and live in its
+            directory; Lexora keeps no password and no editable profile. Workspace roles are Lexora's own and live in its
             membership records. Sign-out ends the session on this device only.
           </p>
         </HonestNote>

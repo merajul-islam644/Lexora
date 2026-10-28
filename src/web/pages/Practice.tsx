@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Eye, X } from "lucide-react";
 import { api, PRACTICE_MODES } from "../api.js";
-import { useToast } from "../state.js";
+import { toast } from "sonner";
 import { Badge, Button, EmptyState, LoadingScreen, PageHeader, Stat, StatusBadge } from "../ui.js";
 
 type Workspace = { id: string; name: string; role: string };
@@ -32,8 +32,8 @@ const MODE_PROMPTS: Record<string, { prompt: string; answer: (i: PracticeItem) =
   word_to_english: { prompt: "What does this mean in English?", answer: (i) => i.englishMeaning },
   bengali_to_word: { prompt: "Which word means this?", answer: (i) => i.word },
   english_to_word: { prompt: "Which word means this?", answer: (i) => i.word },
-  fill_blank: { prompt: "Recall this word:", answer: (i) => `${i.word} — ${i.englishMeaning}` },
-  choose_word: { prompt: "Recognize this word?", answer: (i) => `${i.word} — ${i.englishMeaning}` },
+  fill_blank: { prompt: "Recall this word:", answer: (i) => `${i.word}: ${i.englishMeaning}` },
+  choose_word: { prompt: "Recognize this word?", answer: (i) => `${i.word}: ${i.englishMeaning}` },
   pronunciation: { prompt: "Say it out loud:", answer: (i) => i.pronunciationGuide || i.word }
 };
 
@@ -44,10 +44,9 @@ export function Practice({ workspace }: { workspace: Workspace }) {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [answerText, setAnswerText] = useState("");
-  const toast = useToast();
 
   useEffect(() => {
-    document.title = "Practice — Lexora";
+    document.title = "Practice · Lexora";
   }, []);
 
   const load = useCallback(async () => {
@@ -78,9 +77,9 @@ export function Practice({ workspace }: { workspace: Workspace }) {
         correct
       });
       if (correct) {
-        toast(res.status === "remembered" ? `"${item.word}" is remembered!` : `"${item.word}" marked as learning.`, "success");
+        toast.success(res.status === "remembered" ? `"${item.word}" is remembered!` : `"${item.word}" marked as learning.`);
       } else {
-        toast(`"${item.word}" needs revision — it will come back in 10 minutes.`);
+        toast(`"${item.word}" needs revision; it will come back in 10 minutes.`);
       }
       setRevealed(false);
       setAnswerText("");
@@ -90,7 +89,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
         await load();
       }
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Review failed", "error");
+      toast.error(err instanceof Error ? err.message : "Review failed");
     }
   };
 
@@ -100,7 +99,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
 
   return (
     <div>
-      <PageHeader title="Practice & Revision" subtitle="Spaced repetition on your workspace's approved words. You have to actually answer — viewing a card never marks it mastered." />
+      <PageHeader title="Practice & Revision" subtitle="Spaced repetition on your workspace's approved words. You have to actually answer; viewing a card never marks it mastered." />
 
       {stats && (
         <div className="metrics">

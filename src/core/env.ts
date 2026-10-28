@@ -4,7 +4,15 @@
    the browser config lives in src/web/lib/blocks/config.ts, and the deployed
    function gets its values baked in by scripts/build-function.mjs. */
 
-const read = (key: string): string => process.env[key]?.trim() ?? "";
+// Browser-safe: the SPA bundles this module transitively (the generation
+// provider reads env), so `process` is reached via globalThis with a guard --
+// absent in a browser, where every value is empty and the local provider is
+// chosen. Kept out of Node's process.env typing so the web tsconfig (no
+// @types/node) still compiles.
+const proc = (
+  globalThis as { process?: { env?: Record<string, string | undefined> } }
+).process;
+const read = (key: string): string => proc?.env?.[key]?.trim() ?? "";
 
 export const env = {
   blocksApiUrl: read("VITE_BLOCKS_API_URL") || "https://blocksapi.slsblx.com",

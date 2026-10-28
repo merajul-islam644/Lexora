@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Lightbulb } from "lucide-react";
 import { api, PARTS_OF_SPEECH } from "../api.js";
-import { useToast } from "../state.js";
+import { toast } from "sonner";
 import { Badge, Button, EmptyState, Field, LoadingScreen, PageHeader, Select, Textarea } from "../ui.js";
 
 type Workspace = { id: string; name: string; role: string };
@@ -27,10 +27,9 @@ export function WordBuilder({ workspace }: { workspace: Workspace }) {
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const toast = useToast();
 
   useEffect(() => {
-    document.title = "Word Builder — Lexora";
+    document.title = "Word Builder · Lexora";
   }, []);
 
   const suggest = async (e: React.FormEvent) => {
@@ -61,7 +60,7 @@ export function WordBuilder({ workspace }: { workspace: Workspace }) {
         root: suggestion.root,
         wordFormationExplanation: suggestion.formation
       });
-      toast(`"${res.word}" added to the dictionary as a generated word.`, "success");
+      toast.success(`"${res.word}" added to the dictionary as a generated word.`);
       setSuggestion(null);
       setConcept("");
     } catch (err) {
@@ -79,7 +78,7 @@ export function WordBuilder({ workspace }: { workspace: Workspace }) {
       />
       <div className="wb-grid">
         <form className="card" onSubmit={suggest} noValidate>
-          <Field label="Concept" hint="English or বাংলা — the meaning you want a word for.">
+          <Field label="Concept" hint="English or বাংলা, the meaning you want a word for.">
             <input className="input" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="e.g. deadline / শেষ সময়" required maxLength={200} />
           </Field>
           <Field label="Part of speech">
@@ -122,7 +121,7 @@ export function WordBuilder({ workspace }: { workspace: Workspace }) {
                   <Check size={15} /> {busy ? "Saving…" : "Approve & add to dictionary"}
                 </Button>
               ) : (
-                <p className="notice-plain">This meaning already has a word — no need to invent a rival.</p>
+                <p className="notice-plain">This meaning already has a word; no need to invent a rival.</p>
               )}
             </div>
           )}
@@ -167,10 +166,9 @@ export function TranslationLab({ workspace }: { workspace: Workspace }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phrasebookKey, setPhrasebookKey] = useState(0);
-  const toast = useToast();
 
   useEffect(() => {
-    document.title = "Translation Lab — Lexora";
+    document.title = "Translation Lab · Lexora";
   }, []);
 
   const translate = async (e: React.FormEvent) => {
@@ -193,9 +191,9 @@ export function TranslationLab({ workspace }: { workspace: Workspace }) {
     try {
       await api.post(`/api/ws/${workspace.id}/phrasebook`, { sourceText: text, sourceLang: from, translatedText: result.translation, targetLang: to });
       setPhrasebookKey((k) => k + 1);
-      toast("Saved to your phrasebook.", "success");
+      toast.success("Saved to your phrasebook.");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not save", "error");
+      toast.error(err instanceof Error ? err.message : "Could not save");
     }
   };
 
@@ -203,7 +201,7 @@ export function TranslationLab({ workspace }: { workspace: Workspace }) {
 
   return (
     <div>
-      <PageHeader title="Translation Lab" subtitle="Draft translations built from your own dictionary — word by word, with nothing hidden." />
+      <PageHeader title="Translation Lab" subtitle="Draft translations built from your own dictionary, word by word, with nothing hidden." />
       <div className="info-note" role="note">
         Every result is a <strong>draft</strong> assembled by rules from your dictionary, not fluent machine translation.
         Anything the dictionary doesn't cover appears in brackets.
@@ -275,7 +273,7 @@ export function TranslationLab({ workspace }: { workspace: Workspace }) {
             <Button variant="outline" onClick={saveToPhrasebook}>Save to phrasebook</Button>
             {result.unmapped.length > 0 && (
               <span className="bilingual" style={{ alignSelf: "center" }}>
-                Not in your dictionary yet: {result.unmapped.join(", ")} — add them or use the Word Builder.
+                Not in your dictionary yet: {result.unmapped.join(", ")}; add them or use the Word Builder.
               </span>
             )}
           </div>
@@ -299,8 +297,13 @@ function Phrasebook({ workspaceId }: { workspaceId: string }) {
   }, [workspaceId]);
 
   const remove = async (id: string) => {
-    await api.del(`/api/ws/${workspaceId}/phrasebook/${id}`);
-    setItems((list) => list.filter((i) => i.id !== id));
+    try {
+      await api.del(`/api/ws/${workspaceId}/phrasebook/${id}`);
+      setItems((list) => list.filter((i) => i.id !== id));
+      toast("Removed from the phrasebook.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove the phrase");
+    }
   };
 
   if (!loaded) return <LoadingScreen />;
@@ -318,7 +321,7 @@ function Phrasebook({ workspaceId }: { workspaceId: string }) {
             <tr>
               <th>Original</th>
               <th>Translation</th>
-              <th></th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>

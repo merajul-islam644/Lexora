@@ -5,7 +5,7 @@ import {
 } from "./core.js";
 import { buildAffixes, buildGrammarRules, constructSentence, type AffixSet, type SentenceToken } from "./grammar.js";
 import { HttpError } from "../../lib/http.js";
-import { normalizeWord } from "../../db/connection.js";
+import { normalizeWord } from "../../db/ids.js";
 import type { EntryRow } from "../../db/rows.js";
 import {
   languageProfileSchema,

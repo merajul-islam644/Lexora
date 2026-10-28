@@ -10,7 +10,7 @@ export function Landing() {
         <span className="eyebrow">A private language for your business</span>
         <h1>Invent a language your team actually owns.</h1>
         <p className="lead">
-          Lexora turns your company's own word list — with Bengali and English references kept side by side —
+          Lexora turns your company's own word list (with Bengali and English references kept side by side)
           into a complete constructed language: sounds, words, grammar and example sentences you can review and revise.
         </p>
         <div className="hero-actions">
@@ -32,7 +32,7 @@ export function Landing() {
           <div className="feature-card">
             <div className="icon-box"><Sparkles size={20} /></div>
             <h3>2. Generate the language</h3>
-            <p>Lexora designs a sound system, maps every concept to a new word, and writes grammar rules — explained in English and Bengali.</p>
+            <p>Lexora designs a sound system, maps every concept to a new word, and writes grammar rules, explained in English and Bengali.</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><Languages size={20} /></div>
@@ -57,7 +57,7 @@ export function Landing() {
             <h3>Private to your workspace</h3>
             <p>
               Each workspace has its own dictionary and language, isolated on the server. Members see only what their
-              role allows — viewer, editor, admin, owner.
+              role allows: viewer, editor, admin, owner.
             </p>
           </div>
         </div>
@@ -83,7 +83,7 @@ export function Features() {
           <div className="feature-card">
             <div className="icon-box"><Sparkles size={20} /></div>
             <h3>Language generation</h3>
-            <p>Phonology, vocabulary mapping, grammar rules and example sentences — generated stage by stage, versioned and reversible.</p>
+            <p>Phonology, vocabulary mapping, grammar rules and example sentences, generated stage by stage, versioned and reversible.</p>
           </div>
           <div className="feature-card violet">
             <div className="icon-box"><Languages size={20} /></div>
@@ -93,12 +93,12 @@ export function Features() {
           <div className="feature-card">
             <div className="icon-box"><BookOpen size={20} /></div>
             <h3>Word Builder</h3>
-            <p>Coin new words that follow your language's sound rules and derivation patterns — with collision checks.</p>
+            <p>Coin new words that follow your language's sound rules and derivation patterns, with collision checks.</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><KeyRound size={20} /></div>
             <h3>Practice & Revision</h3>
-            <p>Spaced repetition so the team actually remembers the words. You answer, it schedules — no shortcuts.</p>
+            <p>Spaced repetition so the team actually remembers the words. You answer, it schedules. No shortcuts.</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><Users size={20} /></div>
@@ -116,7 +116,7 @@ export function SecurityPage() {
     <>
       <section className="hero" style={{ paddingBottom: 24 }}>
         <span className="eyebrow">Security & privacy</span>
-        <h1>Private by design — and honest about limits</h1>
+        <h1>Private by design, and honest about limits</h1>
         <p className="lead">What Lexora protects, how, and what it explicitly does not do.</p>
       </section>
       <section className="section" style={{ paddingTop: 0 }}>
@@ -125,7 +125,7 @@ export function SecurityPage() {
             <div className="icon-box"><Lock size={20} /></div>
             <h3>Server-side tenant isolation</h3>
             <p>
-              Every read, write, search, export and generation is authorized against your session on the server —
+              Every read, write, search, export and generation is authorized against your session on the server,
               never in the browser. A workspace you don't belong to answers "not found", so it can't even be probed for existence.
             </p>
           </div>
@@ -140,7 +140,7 @@ export function SecurityPage() {
           <div className="feature-card">
             <div className="icon-box"><Eye size={20} /></div>
             <h3>Full audit trail</h3>
-            <p>Imports, exports, generations, renames and membership changes are recorded in your workspace's activity log — visible to you.</p>
+            <p>Imports, exports, generations, renames and membership changes are recorded in your workspace's activity log, visible to you.</p>
           </div>
           <div className="feature-card" style={{ borderColor: "#F4D5B5" }}>
             <div className="icon-box" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}>
@@ -149,7 +149,7 @@ export function SecurityPage() {
             <h3>What a constructed language is not</h3>
             <p>
               <strong>A constructed language is not encryption.</strong> Anyone who learns it can read it. Use Lexora to build
-              identity, culture and a fun private register — never to protect secrets, credentials or personal data.
+              identity, culture and a fun private register, never to protect secrets, credentials or personal data.
             </p>
           </div>
         </div>

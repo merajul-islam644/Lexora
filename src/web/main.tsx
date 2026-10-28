@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import "./styles.css";
 import { AppShell, PublicLayout, RequireAuth } from "./Layout.js";
-import { ToastProvider, SessionProvider, useActiveWorkspace, useSession } from "./state.js";
+import { SessionProvider, useActiveWorkspace, useSession } from "./state.js";
 import { initTheme } from "./theme.js";
 import { BlocksAuthProvider } from "./blocks-auth.js";
 import { BlocksCallback } from "./pages/BlocksCallback.js";
@@ -18,6 +18,7 @@ import { DictionaryPage } from "./pages/Dictionary.js";
 import { TranslationLab, WordBuilder } from "./pages/Tools.js";
 import { Practice } from "./pages/Practice.js";
 import { ActivityLog, SecurityAccess, Settings } from "./pages/Workspace.js";
+import { AppToaster } from "./ui.js";
 
 /** Injects the active workspace (from session + localStorage) into app pages. */
 function WithWorkspace({ render }: { render: (ws: WorkspaceSummary) => React.ReactNode }) {
@@ -78,9 +79,8 @@ createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <BlocksAuthProvider>
         <SessionProvider>
-          <ToastProvider>
-            <AppRoutes />
-          </ToastProvider>
+          <AppToaster />
+          <AppRoutes />
         </SessionProvider>
       </BlocksAuthProvider>
     </BrowserRouter>

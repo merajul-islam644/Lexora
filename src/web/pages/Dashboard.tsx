@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { api } from "../api.js";
-import { useSession, useToast } from "../state.js";
+import { useSession } from "../state.js";
+import { toast } from "sonner";
 import { Button, ErrorNote, Field, Input, LoadingScreen, PageHeader } from "../ui.js";
 
 /* ------------------------- first-run: create workspace ----------------------- */
@@ -13,7 +14,6 @@ export function Welcome() {
   const [busy, setBusy] = useState(false);
   const { refresh, user } = useSession();
   const navigate = useNavigate();
-  const toast = useToast();
 
   useEffect(() => {
     document.title = "Welcome to Lexora";
@@ -26,7 +26,7 @@ export function Welcome() {
     try {
       await api.post("/api/workspaces", { name });
       await refresh();
-      toast("Workspace created. Welcome!", "success");
+      toast.success("Workspace created. Welcome!");
       navigate("/app/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the workspace");
@@ -40,7 +40,7 @@ export function Welcome() {
       <div className="auth-card" style={{ maxWidth: 480 }}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
           <h1 style={{ fontSize: 24 }}>Welcome, {user?.name || user?.email.split("@")[0] || "there"}!</h1>
-          <p className="bilingual">Create your first workspace — a private home for your dictionary and language.</p>
+          <p className="bilingual">Create your first workspace: a private home for your dictionary and language.</p>
         </div>
         <div className="card">
           <form onSubmit={submit} noValidate>
@@ -54,7 +54,7 @@ export function Welcome() {
           </form>
         </div>
         <p className="auth-alt">
-          You can create more workspaces later — each one gets its own private language.
+          You can create more workspaces later; each one gets its own private language.
         </p>
       </div>
     </div>
@@ -92,7 +92,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = "Dashboard — Lexora";
+    document.title = "Dashboard · Lexora";
   }, []);
 
   useEffect(() => {
@@ -124,7 +124,7 @@ export function Dashboard() {
   return (
     <div>
       <PageHeader
-        title={`${greeting} — ${name}`}
+        title={`${greeting}, ${name}`}
         subtitle={data.language ? "Your private business language is ready to grow." : "Start by building your dictionary, then generate your language."}
       />
 
@@ -148,7 +148,7 @@ export function Dashboard() {
           <h2>No language yet</h2>
           <p className="bilingual">
             Add at least one word to your dictionary, then generate your language from it. Every generated word stays
-            reviewable — and regenerating keeps your previous versions.
+            reviewable, and regenerating keeps your previous versions.
           </p>
           <div style={{ display: "flex", gap: 10 }}>
             <Link to="/app/dictionary" className="btn btn-primary" style={{ textDecoration: "none" }}>Open Dictionary</Link>
@@ -183,7 +183,7 @@ export function Dashboard() {
             <Link to="/app/dictionary" className="btn btn-ghost btn-sm">View all</Link>
           </div>
           {data.preview.length === 0 ? (
-            <p className="bilingual">No words yet — your dictionary is waiting for its first entry.</p>
+            <p className="bilingual">No words yet; your dictionary is waiting for its first entry.</p>
           ) : (
             <div className="table-wrap">
               <table className="table">
@@ -199,9 +199,9 @@ export function Dashboard() {
                   {data.preview.map((p) => (
                     <tr key={p.id}>
                       <td className="mono"><strong>{p.word}</strong></td>
-                      <td className="bn">{p.bengaliMeaning || "—"}</td>
-                      <td>{p.englishMeaning || "—"}</td>
-                      <td className="bilingual">{p.pronunciationGuide || "—"}</td>
+                      <td className="bn">{p.bengaliMeaning || ""}</td>
+                      <td>{p.englishMeaning || ""}</td>
+                      <td className="bilingual">{p.pronunciationGuide || ""}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -234,7 +234,7 @@ export function Dashboard() {
 }
 
 export function formatWhen(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
   if (mins < 1) return "just now";

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { ShieldAlert, Trash2, UserPlus } from "lucide-react";
-import { api, type PublicUser, type WorkspaceSummary } from "../api.js";
-import { useSession, useToast } from "../state.js";
-import { useBlocksAuth } from "../blocks-auth.js";
-import { Badge, Button, ConfirmDialog, Field, HonestNote, Input, LoadingScreen, PageHeader, Select, Stat } from "../ui.js";
+import { Link, useNavigate } from "react-router-dom";
+import { Moon, ShieldAlert, Sun, Trash2, UserPlus } from "lucide-react";
+import { api, type WorkspaceSummary } from "../api.js";
+import { useSession } from "../state.js";
+import { toast } from "sonner";
+import { saveTheme, type Theme } from "../theme.js";
+import { Badge, Button, ConfirmDialog, Field, HonestNote, Input, LoadingScreen, Modal, PageHeader, Select, Stat } from "../ui.js";
 import { formatWhen } from "./Dashboard.js";
 
 type Workspace = { id: string; name: string; role: "owner" | "admin" | "editor" | "viewer" };
@@ -43,7 +44,7 @@ export function SecurityAccess({ workspace }: { workspace: Workspace }) {
   }, [workspace.id]);
 
   useEffect(() => {
-    document.title = "Security & Access — Lexora";
+    document.title = "Security & Access · Lexora";
   }, []);
   useEffect(() => {
     void load();
@@ -57,7 +58,7 @@ export function SecurityAccess({ workspace }: { workspace: Workspace }) {
 
       <HonestNote>
         Your language lives in an access-controlled workspace. But remember: <strong>a constructed language is not
-        encryption</strong> — anyone who learns it can read it. Never use it to protect credentials or personal data.
+        encryption</strong>: anyone who learns it can read it. Never use it to protect credentials or personal data.
       </HonestNote>
 
       <div className="metrics">
@@ -79,7 +80,7 @@ export function SecurityAccess({ workspace }: { workspace: Workspace }) {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Member since</th>
-                {canManage && <th></th>}
+                {canManage && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
@@ -108,11 +109,12 @@ export function SecurityAccess({ workspace }: { workspace: Workspace }) {
       <div className="card">
         <h3>How your workspace is protected</h3>
         <ul style={{ margin: 0, paddingLeft: 20, color: "var(--text-muted)", fontSize: 14, lineHeight: 1.8 }}>
-          <li>Every request is authorized on the server against your session — the browser is never trusted.</li>
-          <li>People outside this workspace get "not found" for it, so its existence can't be probed.</li>
-          <li>Passwords are hashed (scrypt); sessions are HttpOnly cookies you can revoke any time from Settings.</li>
+          <li>Workspace data lives in the SELISE Blocks Data Gateway; every call uses your own signed-in identity.</li>
+          <li>Membership is checked on every workspace action, so data stays inside the team.</li>
+          <li>Sign-in runs through your organisation's SELISE Blocks SSO; Lexora never stores passwords.</li>
           <li>Exports, imports and generations are recorded in the Activity Log.</li>
-          <li>Verification and password-reset links expire; signing out kills the server-side session.</li>
+          <li>Avatar files are stored privately; the browser only ever receives short-lived access links.</li>
+          <li>Signing out ends your Blocks session.</li>
         </ul>
       </div>
     </div>
@@ -125,7 +127,6 @@ function AddMemberButton({ workspaceId, onAdded }: { workspaceId: string; onAdde
   const [role, setRole] = useState("editor");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const toast = useToast();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,7 +134,7 @@ function AddMemberButton({ workspaceId, onAdded }: { workspaceId: string; onAdde
     setError(null);
     try {
       await api.post(`/api/ws/${workspaceId}/members`, { email, role });
-      toast(`${email} added as ${role}.`, "success");
+      toast.success(`${email} added as ${role}.`);
       setOpen(false);
       setEmail("");
       await onAdded();
@@ -150,45 +151,41 @@ function AddMemberButton({ workspaceId, onAdded }: { workspaceId: string; onAdde
         <UserPlus size={14} /> Add member
       </Button>
       {open && (
-        <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
-          <div className="modal" role="dialog" aria-modal="true" aria-label="Add member">
-            <h2>Add a member</h2>
-            <form onSubmit={submit} noValidate>
-              <Field label="Email" hint="They need a Lexora account first. Roles: viewer reads, editor writes, admin manages members.">
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-              </Field>
-              <Field label="Role">
-                <Select value={role} onChange={(v) => setRole(v)}>
-                  {ROLES.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </Select>
-              </Field>
-              {error && <p className="error-text">{error}</p>}
-              <div className="modal-actions">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={busy}>{busy ? "Adding…" : "Add member"}</Button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Add a member" onClose={() => setOpen(false)}>
+          <form onSubmit={submit} noValidate>
+            <Field label="Email" hint="They need a Lexora account first. Roles: viewer reads, editor writes, admin manages members.">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </Field>
+            <Field label="Role">
+              <Select value={role} onChange={(v) => setRole(v)}>
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </Select>
+            </Field>
+            {error && <p className="error-text">{error}</p>}
+            <div className="modal-actions">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={busy}>{busy ? "Adding…" : "Add member"}</Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </>
   );
 }
 
 function RoleSelect({ workspaceId, userId, current, onDone }: { workspaceId: string; userId: string; current: string; onDone: () => Promise<void> }) {
-  const toast = useToast();
   return (
     <Select
       value={current}
       onChange={async (v) => {
         try {
           await api.patch(`/api/ws/${workspaceId}/members/${userId}`, { role: v });
-          toast("Role updated.", "success");
+          toast.success("Role updated.");
           await onDone();
         } catch (err) {
-          toast(err instanceof Error ? err.message : "Could not update the role", "error");
+          toast.error(err instanceof Error ? err.message : "Could not update the role");
         }
       }}
       style={{ width: 110 }}
@@ -204,7 +201,6 @@ function RoleSelect({ workspaceId, userId, current, onDone }: { workspaceId: str
 function RemoveMemberButton({ workspaceId, userId, email, onDone }: { workspaceId: string; userId: string; email: string; onDone: () => Promise<void> }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const toast = useToast();
 
   const remove = async () => {
     setBusy(true);
@@ -214,7 +210,7 @@ function RemoveMemberButton({ workspaceId, userId, email, onDone }: { workspaceI
       setConfirm(false);
       await onDone();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not remove the member", "error");
+      toast.error(err instanceof Error ? err.message : "Could not remove the member");
     } finally {
       setBusy(false);
     }
@@ -247,7 +243,7 @@ export function ActivityLog({ workspace }: { workspace: Workspace }) {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    document.title = "Activity Log — Lexora";
+    document.title = "Activity Log · Lexora";
   }, []);
 
   useEffect(() => {
@@ -275,7 +271,7 @@ export function ActivityLog({ workspace }: { workspace: Workspace }) {
                 <tr key={a.id}>
                   <td className="bilingual" style={{ whiteSpace: "nowrap" }}>{formatWhen(a.createdAt)}</td>
                   <td><Badge tone="navy">{a.action}</Badge></td>
-                  <td className="bilingual">{Object.entries(a.metadata).map(([k, v]) => `${k}: ${String(v)}`).join(" · ") || "—"}</td>
+                  <td className="bilingual">{Object.entries(a.metadata).map(([k, v]) => `${k}: ${String(v)}`).join(" · ") || ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -296,130 +292,141 @@ export function ActivityLog({ workspace }: { workspace: Workspace }) {
 /* ----------------------------------- settings --------------------------------- */
 
 export function Settings({ workspace }: { workspace: Workspace }) {
-  const { workspaces, refresh, user } = useSession();
+  const { workspaces, refresh } = useSession();
   const role = workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
-  const toast = useToast();
+  const summary = workspaces.find((w) => w.id === workspace.id);
 
   useEffect(() => {
-    document.title = "Settings — Lexora";
+    document.title = "Settings · Lexora";
   }, []);
 
   return (
     <div>
       <PageHeader title="Settings" subtitle={`Workspace "${workspace.name}" · you are the ${role}.`} />
-      <WorkspaceSettings workspace={workspace} role={role} onChanged={refresh} />
-      <AccountSettings user={user} onChanged={refresh} />
+      <WorkspaceSettings workspace={workspace} role={role} wordCount={summary?.wordCount} onChanged={refresh} />
+      <AppearanceSettings />
+      <DangerZone workspace={workspace} role={role} onChanged={refresh} />
     </div>
   );
 }
 
-function WorkspaceSettings({ workspace, role, onChanged }: { workspace: Workspace; role: string; onChanged: () => Promise<void> }) {
+const ROLE_TONE: Record<string, "violet" | "teal" | "green" | "gray"> = { owner: "violet", admin: "teal", editor: "green", viewer: "gray" };
+
+function WorkspaceSettings({ workspace, role, wordCount, onChanged }: { workspace: Workspace; role: string; wordCount?: number; onChanged: () => Promise<void> }) {
   const [name, setName] = useState(workspace.name);
   const [busy, setBusy] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const toast = useToast();
-  const navigate = useNavigate();
   const canRename = role === "owner" || role === "admin";
-  const isOwner = role === "owner";
 
   const rename = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
       await api.patch(`/api/ws/${workspace.id}`, { name });
-      toast("Workspace renamed.", "success");
+      toast.success("Workspace renamed.");
       await onChanged();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Rename failed", "error");
+      toast.error(err instanceof Error ? err.message : "Rename failed");
     } finally {
-      setBusy(false);
-    }
-  };
-
-  const destroy = async () => {
-    setBusy(true);
-    try {
-      await api.del(`/api/ws/${workspace.id}`);
-      toast("Workspace and all its data were deleted.", "success");
-      localStorage.removeItem("lexora.activeWorkspace");
-      await onChanged();
-      navigate("/app/welcome");
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Delete failed", "error");
       setBusy(false);
     }
   };
 
   return (
     <div className="card">
-      <h3>Workspace</h3>
+      <div className="card-title">
+        <h3>Workspace</h3>
+        <div className="ws-meta">
+          <Badge tone={ROLE_TONE[role] ?? "gray"}>{role}</Badge>
+          {typeof wordCount === "number" && <span className="bilingual">{wordCount} words</span>}
+        </div>
+      </div>
       {canRename ? (
-        <form onSubmit={rename} className="form-row" noValidate>
+        <form onSubmit={rename} className="rename-row" noValidate>
           <Field label="Workspace name">
             <Input value={name} onChange={(e) => setName(e.target.value)} minLength={2} maxLength={80} required />
           </Field>
-          <div style={{ alignSelf: "end" }}>
-            <Button type="submit" disabled={busy || name.trim() === workspace.name}>Save name</Button>
-          </div>
+          <Button type="submit" disabled={busy || name.trim() === workspace.name}>Save name</Button>
         </form>
       ) : (
         <p className="bilingual">Only an admin or the owner can rename the workspace.</p>
       )}
+      <p className="bilingual" style={{ marginTop: 16, marginBottom: 0 }}>
+        Members and roles live in <Link to="/app/security">Security &amp; Access</Link>, your photo and name in{" "}
+        <Link to="/app/profile">Profile</Link>.
+      </p>
+    </div>
+  );
+}
 
-      <div style={{ borderTop: "1px solid var(--border)", marginTop: 18, paddingTop: 18 }}>
-        <h3 style={{ color: "var(--danger)" }}>Danger zone</h3>
-        {isOwner ? (
-          <>
-            <p className="bilingual">Deleting the workspace permanently removes its dictionary, language, versions and history. This cannot be undone.</p>
-            <Button variant="danger" onClick={() => setDeleteConfirm(true)}>
-              <ShieldAlert size={15} /> Delete this workspace
-            </Button>
-            {deleteConfirm && (
-              <ConfirmDialog
-                title={`Delete "${workspace.name}"?`}
-                body="Everything in this workspace — dictionary, generated language, all versions, practice data and activity history — will be permanently deleted."
-                confirmLabel="Delete forever"
-                danger
-                onConfirm={destroy}
-                onCancel={() => setDeleteConfirm(false)}
-                busy={busy}
-              />
-            )}
-          </>
-        ) : (
-          <p className="bilingual">Only the workspace owner can delete it.</p>
-        )}
+/* Light/dark control, synced with the top-bar toggle: saveTheme() broadcasts
+   the THEME_EVENT and AppShell listens. */
+function AppearanceSettings() {
+  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
+  const pick = (next: Theme) => {
+    setTheme(next);
+    saveTheme(next);
+  };
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3>Appearance</h3>
+      <p className="bilingual">Light or dark, everywhere in the app; same switch as the one in the top bar.</p>
+      <div className="seg" role="radiogroup" aria-label="Theme">
+        <button type="button" role="radio" aria-checked={theme === "light"} className={theme === "light" ? "on" : ""} onClick={() => pick("light")}>
+          <Sun size={14} /> Light
+        </button>
+        <button type="button" role="radio" aria-checked={theme === "dark"} className={theme === "dark" ? "on" : ""} onClick={() => pick("dark")}>
+          <Moon size={14} /> Dark
+        </button>
       </div>
     </div>
   );
 }
 
-function AccountSettings({ user }: { user: PublicUser | null; onChanged: () => Promise<void> }) {
-  const { refresh } = useSession();
-  const blocks = useBlocksAuth();
+function DangerZone({ workspace, role, onChanged }: { workspace: Workspace; role: string; onChanged: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const navigate = useNavigate();
+  const isOwner = role === "owner";
 
-  // Ends the Blocks IAM session -- with SSO as the only sign-in, an alive IAM
-  // session would make sign-out a one-click undo. There is no app-side session
-  // cookie anymore; /me just reads the caller's token. (Account deletion is an
-  // IAM-admin concern now: the app keeps no user records of its own.)
-  const signOut = async () => {
-    await blocks.logout();
-    await refresh();
-    navigate("/login");
+  const destroy = async () => {
+    setBusy(true);
+    try {
+      await api.del(`/api/ws/${workspace.id}`);
+      toast.success("Workspace and all its data were deleted.");
+      localStorage.removeItem("lexora.activeWorkspace");
+      await onChanged();
+      navigate("/app/welcome");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+      setBusy(false);
+    }
   };
 
-  if (!user) return null;
-
   return (
-    <div className="card" style={{ marginTop: 16 }}>
-      <div className="card-title">
-        <h3>Your account</h3>
-        <Button variant="outline" size="sm" onClick={() => void signOut()}>Sign out</Button>
-      </div>
-      <p className="bilingual">
-        {user.email} · signed in with SELISE Blocks SSO · joined {new Date(user.createdAt).toLocaleDateString()}
-      </p>
+    <div className="card card-danger" style={{ marginTop: 16 }}>
+      <h3 style={{ color: "var(--danger)" }}>Danger zone</h3>
+      {isOwner ? (
+        <>
+          <p className="bilingual">Deleting the workspace permanently removes its dictionary, language, versions and history. This cannot be undone.</p>
+          <Button variant="danger" onClick={() => setConfirming(true)}>
+            <ShieldAlert size={15} /> Delete this workspace
+          </Button>
+          {confirming && (
+            <ConfirmDialog
+              title={`Delete "${workspace.name}"?`}
+              body="Everything in this workspace (dictionary, generated language, all versions, practice data and activity history) will be permanently deleted."
+              confirmLabel="Delete forever"
+              danger
+              onConfirm={destroy}
+              onCancel={() => setConfirming(false)}
+              busy={busy}
+            />
+          )}
+        </>
+      ) : (
+        <p className="bilingual">Only the workspace owner can delete it.</p>
+      )}
     </div>
   );
 }

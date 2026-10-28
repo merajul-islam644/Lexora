@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, CircleDashed, Loader2, RotateCcw } from "lucide-react";
 import { api, type GrammarData, type JobState, type LanguageSummary } from "../api.js";
-import { useSession, useToast } from "../state.js";
+import { useSession } from "../state.js";
+import { toast } from "sonner";
 import { Badge, Button, ConfirmDialog, EmptyState, ErrorNote, Field, HonestNote, Input, LoadingScreen, Modal, PageHeader, Select, Stat } from "../ui.js";
 import { formatWhen } from "./Dashboard.js";
 import { GEN_STYLES } from "../api.js";
@@ -21,7 +22,6 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [grammar, setGrammar] = useState<GrammarData | null>(null);
   const [versions, setVersions] = useState<Array<{ version: number; change_summary: string; created_at: string }>>([]);
-  const toast = useToast();
   const { workspaces } = useSession();
   const role = workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
   const canEdit = role === "owner" || role === "admin" || role === "editor";
@@ -36,7 +36,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
   }, [workspace.id]);
 
   useEffect(() => {
-    document.title = "My Language — Lexora";
+    document.title = "My Language · Lexora";
   }, []);
 
   useEffect(() => {
@@ -60,11 +60,11 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
           if (["completed", "failed", "cancelled", "timeout"].includes(next.status)) {
             window.clearInterval(pollRef.current ?? undefined);
             if (next.status === "completed" && next.result) {
-              toast(`Language "${next.result.name}" is ready (version ${next.result.version}).`, "success");
+              toast.success(`Language "${next.result.name}" is ready (version ${next.result.version}).`);
             } else if (next.status === "failed") {
-              toast(next.error ?? "Generation failed. Nothing was saved.", "error");
+              toast.error(next.error ?? "Generation failed. Nothing was saved.");
             } else if (next.status === "timeout") {
-              toast("Generation took too long and was stopped. Nothing was saved — you can retry.", "error");
+              toast.error("Generation took too long and was stopped. Nothing was saved; you can retry.");
             }
             await load();
             void api.get<GrammarData>(`/api/ws/${workspace.id}/language/grammar`).then(setGrammar).catch(() => setGrammar(null));
@@ -104,7 +104,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
         <EmptyState
           icon={<SparklesIcon />}
           title="No language yet"
-          body="Your dictionary is the raw material. Generate a language from it — sound rules, words, grammar and example sentences, all reviewable."
+          body="Your dictionary is the raw material. Generate a language from it: sound rules, words, grammar and example sentences, all reviewable."
           action={
             canEdit ? (
               <Button onClick={() => setGenOpen(true)}>Generate my language</Button>
@@ -126,8 +126,8 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
             </div>
             <p className="desc">{language.description}</p>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 12, fontSize: 13, color: "#C9D5E2" }}>
-              <span>Word order: <strong style={{ color: "#fff" }}>{language.wordOrder ?? "—"}</strong></span>
-              <span>Style: <strong style={{ color: "#fff" }}>{language.style ?? "—"}</strong></span>
+              <span>Word order: <strong style={{ color: "#fff" }}>{language.wordOrder ?? ""}</strong></span>
+              <span>Style: <strong style={{ color: "#fff" }}>{language.style ?? ""}</strong></span>
               <span>Words: <strong style={{ color: "#fff" }}>{language.vocabularyCount}</strong></span>
               <span>Rules: <strong style={{ color: "#fff" }}>{language.rulesCount}</strong></span>
             </div>
@@ -162,7 +162,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-title">
             <h3>Versions</h3>
-            <span className="bilingual">Restoring creates a new version — nothing is overwritten.</span>
+            <span className="bilingual">Restoring creates a new version, nothing is overwritten.</span>
           </div>
           <div className="table-wrap">
             <table className="table">
@@ -171,7 +171,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
                   <th>Version</th>
                   <th>Summary</th>
                   <th>Created</th>
-                  <th></th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -216,7 +216,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
       {regenConfirm && (
         <ConfirmDialog
           title="Generate a new version?"
-          body={`A new version of "${language?.name}" will be created from your current dictionary. Vocabulary or grammar may change — your previous versions stay available for rollback.`}
+          body={`A new version of "${language?.name}" will be created from your current dictionary. Vocabulary or grammar may change; your previous versions stay available for rollback.`}
           confirmLabel="Generate new version"
           onConfirm={() => {
             setRegenConfirm(false);
@@ -233,7 +233,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
           onClose={() => setRenameOpen(false)}
           onRenamed={async (name) => {
             setRenameOpen(false);
-            toast(`Renamed to "${name}".`, "success");
+            toast.success(`Renamed to "${name}".`);
             await load();
           }}
         />
@@ -369,7 +369,7 @@ function GrammarReview({ grammar }: { grammar: GrammarData }) {
     <div className="card" style={{ marginTop: 16 }}>
       <div className="card-title">
         <h3>Grammar & sound rules</h3>
-        <span className="bilingual">Review everything — you can regenerate any time.</span>
+        <span className="bilingual">Review everything, you can regenerate any time.</span>
       </div>
 
       <div className="grid-2" style={{ marginBottom: 16 }}>
@@ -441,7 +441,7 @@ function GrammarReview({ grammar }: { grammar: GrammarData }) {
               )}
               {rule.invalidExamples.map((iv) => (
                 <p key={iv.example} style={{ color: "var(--danger)", fontSize: 13 }}>
-                  ✗ {iv.example} — {iv.why}
+                  ✗ {iv.example}: {iv.why}
                 </p>
               ))}
             </div>
@@ -457,17 +457,16 @@ function GrammarReview({ grammar }: { grammar: GrammarData }) {
 function RestoreButton({ workspaceId, version, onDone }: { workspaceId: string; version: number; onDone: () => Promise<void> }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const toast = useToast();
 
   const doRestore = async () => {
     setBusy(true);
     try {
       const res = await api.post<{ message: string; version: number }>(`/api/ws/${workspaceId}/language/versions/${version}/restore`);
-      toast(res.message, "success");
+      toast.success(res.message);
       setConfirm(false);
       await onDone();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Restore failed", "error");
+      toast.error(err instanceof Error ? err.message : "Restore failed");
     } finally {
       setBusy(false);
     }
@@ -481,7 +480,7 @@ function RestoreButton({ workspaceId, version, onDone }: { workspaceId: string; 
       {confirm && (
         <ConfirmDialog
           title={`Restore version ${version}?`}
-          body={`Version ${version} will come back as a new version — the current one is kept in history.`}
+          body={`Version ${version} will come back as a new version; the current one is kept in history.`}
           confirmLabel="Restore"
           onConfirm={doRestore}
           onCancel={() => setConfirm(false)}

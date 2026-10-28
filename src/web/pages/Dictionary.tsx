@@ -1,10 +1,48 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Download, FileUp, Pencil, Plus, Search } from "lucide-react";
-import { api, downloadFile, PARTS_OF_SPEECH, type EntryDTO, type ImportReport } from "../api.js";
-import { useSession, useToast } from "../state.js";
-import { Badge, Button, ConfirmDialog, EmptyState, ErrorNote, Field, Input, LoadingScreen, Modal, PageHeader, Select, SourceBadge, Spinner, StatusBadge, Textarea } from "../ui.js";
+import {
+  Archive,
+  ArchiveRestore,
+  Braces,
+  Download,
+  FileSpreadsheet,
+  FileUp,
+  Pencil,
+  Plus,
+  Search,
+  Upload,
+} from "lucide-react";
+import {
+  api,
+  downloadFile,
+  PARTS_OF_SPEECH,
+  type EntryDTO,
+  type ImportReport,
+} from "../api.js";
+import { useSession } from "../state.js";
+import { toast } from "sonner";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  ErrorNote,
+  Field,
+  Input,
+  LoadingScreen,
+  Modal,
+  PageHeader,
+  Select,
+  SourceBadge,
+  Spinner,
+  StatusBadge,
+  Textarea,
+} from "../ui.js";
 
-type Workspace = { id: string; name: string; role: "owner" | "admin" | "editor" | "viewer" };
+type Workspace = {
+  id: string;
+  name: string;
+  role: "owner" | "admin" | "editor" | "viewer";
+};
 
 interface ListResponse {
   total: number;
@@ -24,7 +62,7 @@ const EMPTY_FORM = {
   wordFormationExplanation: "",
   grammarNotes: "",
   mnemonic: "",
-  examplesText: ""
+  examplesText: "",
 };
 
 type FormState = typeof EMPTY_FORM;
@@ -41,7 +79,9 @@ function formFromEntry(e: EntryDTO): FormState {
     wordFormationExplanation: e.wordFormationExplanation,
     grammarNotes: e.grammarNotes,
     mnemonic: e.mnemonic,
-    examplesText: e.exampleSentences.map((s) => [s.constructed, s.english, s.bengali].join(" | ")).join("\n")
+    examplesText: e.exampleSentences
+      .map((s) => [s.constructed, s.english, s.bengali].join(" | "))
+      .join("\n"),
   };
 }
 
@@ -62,9 +102,19 @@ function payloadFromForm(f: FormState) {
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line, i) => {
-        const [constructed = "", english = "", bengali = ""] = line.split("|").map((p) => p.trim());
-        return { id: `ex-${i + 1}`, constructed, english, bengali, gloss: [], grammarNotes: "", reviewStatus: "approved" as const };
-      })
+        const [constructed = "", english = "", bengali = ""] = line
+          .split("|")
+          .map((p) => p.trim());
+        return {
+          id: `ex-${i + 1}`,
+          constructed,
+          english,
+          bengali,
+          gloss: [],
+          grammarNotes: "",
+          reviewStatus: "approved" as const,
+        };
+      }),
   };
 }
 
@@ -79,21 +129,28 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
   const [editing, setEditing] = useState<EntryDTO | "new" | null>(null);
   const [ioOpen, setIoOpen] = useState<"import" | "export" | null>(null);
   const { workspaces } = useSession();
-  const role = workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
+  const role =
+    workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
   const canWrite = role === "owner" || role === "admin" || role === "editor";
 
   useEffect(() => {
-    document.title = "Dictionary — Lexora";
+    document.title = "Dictionary · Lexora";
   }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), pageSize: "20", sort });
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: "20",
+        sort,
+      });
       if (q.trim()) params.set("q", q.trim());
       if (pos) params.set("pos", pos);
       if (source) params.set("source", source);
-      const res = await api.get<ListResponse>(`/api/ws/${workspace.id}/dictionary?${params.toString()}`);
+      const res = await api.get<ListResponse>(
+        `/api/ws/${workspace.id}/dictionary?${params.toString()}`,
+      );
       setData(res);
     } finally {
       setLoading(false);
@@ -105,7 +162,13 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
     return () => window.clearTimeout(t);
   }, [load, q]);
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const totalPages = data
+    ? Math.max(1, Math.ceil(data.total / data.pageSize))
+    : 1;
+
+  // First load: a bare centered spinner filling the viewport, so the page
+  // never overflows (header and toolbar appear once data is in).
+  if (!data && loading) return <LoadingScreen />;
 
   return (
     <div>
@@ -133,22 +196,59 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
 
       <div className="toolbar">
         <div className="grow" style={{ position: "relative" }}>
-          <Search size={15} style={{ position: "absolute", left: 10, top: 11, color: "var(--text-muted)" }} />
-          <Input placeholder="Search word, বাংলা or English…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ paddingLeft: 32 }} aria-label="Search dictionary" />
+          <Search
+            size={15}
+            style={{
+              position: "absolute",
+              left: 10,
+              top: 11,
+              color: "var(--text-muted)",
+            }}
+          />
+          <Input
+            placeholder="Search word, Beng or English…"
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value);
+              setPage(1);
+            }}
+            style={{ paddingLeft: 32 }}
+            aria-label="Search dictionary"
+          />
         </div>
-        <Select value={pos} onChange={(v) => { setPos(v); setPage(1); }} aria-label="Filter by part of speech">
+        <Select
+          value={pos}
+          onChange={(v) => {
+            setPos(v);
+            setPage(1);
+          }}
+          aria-label="Filter by part of speech"
+        >
           <option value="">All parts of speech</option>
           {PARTS_OF_SPEECH.map((p) => (
-            <option key={p} value={p}>{p}</option>
+            <option key={p} value={p}>
+              {p}
+            </option>
           ))}
         </Select>
-        <Select value={source} onChange={(v) => { setSource(v); setPage(1); }} aria-label="Filter by source">
+        <Select
+          value={source}
+          onChange={(v) => {
+            setSource(v);
+            setPage(1);
+          }}
+          aria-label="Filter by source"
+        >
           <option value="">All sources</option>
           <option value="user">Your words</option>
           <option value="generated">Generated drafts</option>
           <option value="imported">Imported</option>
         </Select>
-        <Select value={sort} onChange={(v) => setSort(v)} aria-label="Sort order">
+        <Select
+          value={sort}
+          onChange={(v) => setSort(v)}
+          aria-label="Sort order"
+        >
           <option value="alpha">A → Z</option>
           <option value="newest">Newest first</option>
           <option value="updated">Recently updated</option>
@@ -156,13 +256,25 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
         </Select>
       </div>
 
-      {!data && loading ? (
-        <LoadingScreen />
-      ) : !data || data.items.length === 0 ? (
+      {!data || data.items.length === 0 ? (
         <EmptyState
-          title={q || pos || source ? "No words match" : "Your dictionary is empty"}
-          body={q || pos || source ? "Try a different search or filter." : canWrite ? "Add your first word — it only needs the word itself, but a বাংলা or English reference makes generation much better." : "An editor hasn't added words yet."}
-          action={canWrite && !q && !pos && !source ? <Button onClick={() => setEditing("new")}>Add your first word</Button> : undefined}
+          title={
+            q || pos || source ? "No words match" : "Your dictionary is empty"
+          }
+          body={
+            q || pos || source
+              ? "Try a different search or filter."
+              : canWrite
+                ? "Add your first word. It only needs the word itself, but a বাংলা or English reference makes generation much better."
+                : "An editor hasn't added words yet."
+          }
+          action={
+            canWrite && !q && !pos && !source ? (
+              <Button onClick={() => setEditing("new")}>
+                Add your first word
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="card" style={{ padding: 0 }}>
@@ -171,33 +283,51 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
               <thead>
                 <tr>
                   <th>Language word</th>
-                  <th>বাংলা reference</th>
+                  <th>Bengali reference</th>
                   <th>English reference</th>
-                  <th>Part of speech</th>
-                  <th>Pronunciation</th>
+                  <th>Parts of speech</th>
+                  <th>Pronounciation</th>
                   <th>Status</th>
-                  <th></th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {data.items.map((e) => (
                   <tr key={e.id}>
                     <td>
-                      <div className="mono"><strong>{e.word}</strong></div>
-                      <div style={{ marginTop: 4 }}><SourceBadge source={e.source} /></div>
+                      <div className="mono">
+                        <strong>{e.word}</strong>
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        <SourceBadge source={e.source} />
+                      </div>
                     </td>
-                    <td className="bn">{e.bengaliMeaning || "—"}</td>
-                    <td>{e.englishMeaning || "—"}</td>
-                    <td><Badge tone="navy">{e.partOfSpeech}</Badge></td>
-                    <td className="bilingual">{e.pronunciationGuide || "—"}</td>
-                    <td><StatusBadge status={e.status} /></td>
+                    <td className="bn">{e.bengaliMeaning || ""}</td>
+                    <td>{e.englishMeaning || ""}</td>
+                    <td>
+                      <Badge tone="navy">{e.partOfSpeech}</Badge>
+                    </td>
+                    <td className="bilingual">{e.pronunciationGuide || ""}</td>
+                    <td>
+                      <StatusBadge status={e.status} />
+                    </td>
                     <td>
                       {canWrite && (
                         <div style={{ display: "flex", gap: 4 }}>
-                          <Button variant="ghost" size="sm" className="btn-icon" onClick={() => setEditing(e)} aria-label={`Edit ${e.word}`}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="btn-icon"
+                            onClick={() => setEditing(e)}
+                            aria-label={`Edit ${e.word}`}
+                          >
                             <Pencil size={14} />
                           </Button>
-                          <ArchiveButton workspaceId={workspace.id} entry={e} onDone={load} />
+                          <ArchiveButton
+                            workspaceId={workspace.id}
+                            entry={e}
+                            onDone={load}
+                          />
                         </div>
                       )}
                     </td>
@@ -211,9 +341,25 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
 
       {data && totalPages > 1 && (
         <div className="pagination">
-          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-          <span>Page {data.page} of {totalPages} · {data.total} words</span>
-          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+          >
+            Previous
+          </Button>
+          <span>
+            Page {data.page} of {totalPages} · {data.total} words
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage(page + 1)}
+          >
+            Next
+          </Button>
         </div>
       )}
 
@@ -229,25 +375,49 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
         />
       )}
 
-      {ioOpen === "export" && <ExportDialog workspaceId={workspace.id} onClose={() => setIoOpen(null)} />}
-      {ioOpen === "import" && <ImportDialog workspaceId={workspace.id} onClose={() => setIoOpen(null)} onImported={load} />}
+      {ioOpen === "export" && (
+        <ExportDialog
+          workspaceId={workspace.id}
+          onClose={() => setIoOpen(null)}
+        />
+      )}
+      {ioOpen === "import" && (
+        <ImportDialog
+          workspaceId={workspace.id}
+          onClose={() => setIoOpen(null)}
+          onImported={load}
+        />
+      )}
     </div>
   );
 }
 
 /* --------------------------------- add / edit -------------------------------- */
 
-function EditDialog({ workspaceId, entry, onClose, onSaved }: { workspaceId: string; entry: EntryDTO | null; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [form, setForm] = useState<FormState>(entry ? formFromEntry(entry) : EMPTY_FORM);
+function EditDialog({
+  workspaceId,
+  entry,
+  onClose,
+  onSaved,
+}: {
+  workspaceId: string;
+  entry: EntryDTO | null;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [form, setForm] = useState<FormState>(
+    entry ? formFromEntry(entry) : EMPTY_FORM,
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const toast = useToast();
   const firstInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => firstInput.current?.focus(), []);
 
-  const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  const set =
+    (key: keyof FormState) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -255,11 +425,17 @@ function EditDialog({ workspaceId, entry, onClose, onSaved }: { workspaceId: str
     setError(null);
     try {
       if (entry) {
-        await api.patch(`/api/ws/${workspaceId}/dictionary/${entry.id}`, payloadFromForm(form));
-        toast(`"${form.word}" updated.`, "success");
+        await api.patch(
+          `/api/ws/${workspaceId}/dictionary/${entry.id}`,
+          payloadFromForm(form),
+        );
+        toast.success(`"${form.word}" updated.`);
       } else {
-        await api.post(`/api/ws/${workspaceId}/dictionary`, payloadFromForm(form));
-        toast(`"${form.word}" added to your dictionary.`, "success");
+        await api.post(
+          `/api/ws/${workspaceId}/dictionary`,
+          payloadFromForm(form),
+        );
+        toast.success(`"${form.word}" added to your dictionary.`);
       }
       await onSaved();
     } catch (err) {
@@ -270,54 +446,119 @@ function EditDialog({ workspaceId, entry, onClose, onSaved }: { workspaceId: str
   };
 
   return (
-    <Modal title={entry ? `Edit "${entry.word}"` : "Add a word"} onClose={onClose} wide>
+    <Modal
+      title={entry ? `Edit "${entry.word}"` : "Add a word"}
+      onClose={onClose}
+      wide
+    >
       <form onSubmit={submit} noValidate>
         <div className="form-row">
           <Field label="Constructed word">
-            <Input ref={firstInput} value={form.word} onChange={set("word")} required maxLength={80} placeholder="e.g. vethra" />
+            <Input
+              ref={firstInput}
+              value={form.word}
+              onChange={set("word")}
+              required
+              maxLength={80}
+              placeholder="e.g. vethra"
+            />
           </Field>
           <Field label="Part of speech">
-            <Select value={form.partOfSpeech} onChange={(v) => setForm((f) => ({ ...f, partOfSpeech: v }))}>
+            <Select
+              value={form.partOfSpeech}
+              onChange={(v) => setForm((f) => ({ ...f, partOfSpeech: v }))}
+            >
               {PARTS_OF_SPEECH.map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p}>
+                  {p}
+                </option>
               ))}
             </Select>
           </Field>
         </div>
         <div className="form-row">
           <Field label="বাংলা reference">
-            <Input value={form.bengaliMeaning} onChange={set("bengaliMeaning")} maxLength={200} placeholder="e.g. চুক্তি" />
+            <Input
+              value={form.bengaliMeaning}
+              onChange={set("bengaliMeaning")}
+              maxLength={200}
+              placeholder="e.g. চুক্তি"
+            />
           </Field>
           <Field label="English reference">
-            <Input value={form.englishMeaning} onChange={set("englishMeaning")} maxLength={200} placeholder="e.g. agreement" />
+            <Input
+              value={form.englishMeaning}
+              onChange={set("englishMeaning")}
+              maxLength={200}
+              placeholder="e.g. agreement"
+            />
           </Field>
         </div>
         <div className="form-row">
           <Field label="Pronunciation guide" hint="e.g. VEH-thrah">
-            <Input value={form.pronunciationGuide} onChange={set("pronunciationGuide")} maxLength={120} />
+            <Input
+              value={form.pronunciationGuide}
+              onChange={set("pronunciationGuide")}
+              maxLength={120}
+            />
           </Field>
           <Field label="IPA">
             <Input value={form.ipa} onChange={set("ipa")} maxLength={120} />
           </Field>
         </div>
         <Field label="Root / formation notes">
-          <Input value={form.root} onChange={set("root")} maxLength={120} placeholder="e.g. veth + -ra" />
+          <Input
+            value={form.root}
+            onChange={set("root")}
+            maxLength={120}
+            placeholder="e.g. veth + -ra"
+          />
         </Field>
-        <Field label="Example sentences" hint="One per line: constructed | english | bengali">
-          <Textarea value={form.examplesText} onChange={set("examplesText")} rows={3} placeholder={"vethra kairum et | We approve the agreement | আমরা চুক্তিটি অনুমোদন করি"} />
+        <Field
+          label="Example sentences"
+          hint="One per line: constructed | english | bengali"
+        >
+          <Textarea
+            value={form.examplesText}
+            onChange={set("examplesText")}
+            rows={3}
+            placeholder={
+              "vethra kairum et | We approve the agreement | আমরা চুক্তিটি অনুমোদন করি"
+            }
+          />
         </Field>
         <div className="form-row">
           <Field label="Grammar notes">
-            <Input value={form.grammarNotes} onChange={set("grammarNotes")} maxLength={600} />
+            <Input
+              value={form.grammarNotes}
+              onChange={set("grammarNotes")}
+              maxLength={600}
+            />
           </Field>
           <Field label="Mnemonic">
-            <Input value={form.mnemonic} onChange={set("mnemonic")} maxLength={400} />
+            <Input
+              value={form.mnemonic}
+              onChange={set("mnemonic")}
+              maxLength={400}
+            />
           </Field>
         </div>
         <ErrorNote message={error} />
         <div className="modal-actions">
-          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" disabled={busy || form.word.trim().length === 0}>{busy ? "Saving…" : entry ? "Save changes" : "Add word"}</Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={busy}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={busy || form.word.trim().length === 0}
+          >
+            {busy ? "Saving…" : entry ? "Save changes" : "Add word"}
+          </Button>
         </div>
       </form>
     </Modal>
@@ -326,9 +567,16 @@ function EditDialog({ workspaceId, entry, onClose, onSaved }: { workspaceId: str
 
 /* ---------------------------------- archive ---------------------------------- */
 
-function ArchiveButton({ workspaceId, entry, onDone }: { workspaceId: string; entry: EntryDTO; onDone: () => Promise<void> }) {
+function ArchiveButton({
+  workspaceId,
+  entry,
+  onDone,
+}: {
+  workspaceId: string;
+  entry: EntryDTO;
+  onDone: () => Promise<void>;
+}) {
   const [busy, setBusy] = useState(false);
-  const toast = useToast();
 
   const act = async () => {
     setBusy(true);
@@ -342,14 +590,23 @@ function ArchiveButton({ workspaceId, entry, onDone }: { workspaceId: string; en
       }
       await onDone();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Action failed", "error");
+      toast.error(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Button variant="ghost" size="sm" className="btn-icon" onClick={act} disabled={busy} aria-label={entry.archived ? `Restore ${entry.word}` : `Archive ${entry.word}`}>
+    <Button
+      variant="ghost"
+      size="sm"
+      className="btn-icon"
+      onClick={act}
+      disabled={busy}
+      aria-label={
+        entry.archived ? `Restore ${entry.word}` : `Archive ${entry.word}`
+      }
+    >
       {entry.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
     </Button>
   );
@@ -357,33 +614,89 @@ function ArchiveButton({ workspaceId, entry, onDone }: { workspaceId: string; en
 
 /* ------------------------------ import / export ------------------------------ */
 
-function ExportDialog({ workspaceId, onClose }: { workspaceId: string; onClose: () => void }) {
+function ExportDialog({
+  workspaceId,
+  onClose,
+}: {
+  workspaceId: string;
+  onClose: () => void;
+}) {
   return (
     <Modal title="Export dictionary" onClose={onClose}>
-      <p className="bilingual">Download the whole dictionary (archived words excluded). Exports are recorded in your activity log.</p>
-      <div style={{ display: "flex", gap: 10 }}>
-        <Button variant="outline" onClick={() => void downloadFile(`/api/ws/${workspaceId}/dictionary/export?format=csv`)}>
-          <Download size={15} /> CSV
-        </Button>
-        <Button variant="outline" onClick={() => void downloadFile(`/api/ws/${workspaceId}/dictionary/export?format=json`)}>
-          <Download size={15} /> JSON
-        </Button>
-      </div>
+      <p className="bilingual">
+        Download the whole dictionary (archived words excluded). Exports are
+        recorded in your activity log.
+      </p>
+      <button
+        className="modal-option"
+        onClick={() =>
+          void downloadFile(
+            `/api/ws/${workspaceId}/dictionary/export?format=csv`,
+          )
+        }
+      >
+        <FileSpreadsheet size={18} aria-hidden="true" />
+        <span className="modal-option-text">
+          <span className="modal-option-title">CSV</span>
+          <span className="modal-option-sub">
+            Opens in Excel or Google Sheets
+          </span>
+        </span>
+        <Download
+          size={15}
+          aria-hidden="true"
+          className="modal-option-action"
+        />
+      </button>
+      <button
+        className="modal-option"
+        onClick={() =>
+          void downloadFile(
+            `/api/ws/${workspaceId}/dictionary/export?format=json`,
+          )
+        }
+      >
+        <Braces size={18} aria-hidden="true" />
+        <span className="modal-option-text">
+          <span className="modal-option-title">JSON</span>
+          <span className="modal-option-sub">
+            Every field, best for backups and re-import
+          </span>
+        </span>
+        <Download
+          size={15}
+          aria-hidden="true"
+          className="modal-option-action"
+        />
+      </button>
     </Modal>
   );
 }
 
-function ImportDialog({ workspaceId, onClose, onImported }: { workspaceId: string; onClose: () => void; onImported: () => Promise<void> }) {
+function ImportDialog({
+  workspaceId,
+  onClose,
+  onImported,
+}: {
+  workspaceId: string;
+  onClose: () => void;
+  onImported: () => Promise<void>;
+}) {
   const [report, setReport] = useState<ImportReport | null>(null);
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const toast = useToast();
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const downloadTemplate = async () => {
-    const res = await api.get<{ headers: string[] }>(`/api/ws/${workspaceId}/dictionary/template`);
-    const csv = res.headers.join(",") + "\nvethra,চুক্তি,agreement,,,noun,,,\nsolven,গোপনীয়,confidential,,,adjective,,,\n";
+    const res = await api.get<{ headers: string[] }>(
+      `/api/ws/${workspaceId}/dictionary/template`,
+    );
+    const csv =
+      res.headers.join(",") +
+      "\nvethra,চুক্তি,agreement,,,noun,,,\nsolven,গোপনীয়,confidential,,,adjective,,,\n";
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -402,7 +715,10 @@ function ImportDialog({ workspaceId, onClose, onImported }: { workspaceId: strin
     const format = file.name.toLowerCase().endsWith(".json") ? "json" : "csv";
     setBusy(true);
     try {
-      const res = await api.post<{ report: ImportReport }>(`/api/ws/${workspaceId}/dictionary/import/preview`, { format, content });
+      const res = await api.post<{ report: ImportReport }>(
+        `/api/ws/${workspaceId}/dictionary/import/preview`,
+        { format, content },
+      );
       setReport(res.report);
       setRows(res.report.rows);
     } catch (err) {
@@ -415,8 +731,13 @@ function ImportDialog({ workspaceId, onClose, onImported }: { workspaceId: strin
   const commit = async () => {
     setBusy(true);
     try {
-      const res = await api.post<{ imported: number; skippedDuplicates: number }>(`/api/ws/${workspaceId}/dictionary/import/commit`, { rows });
-      toast(`Imported ${res.imported} word${res.imported === 1 ? "" : "s"}${res.skippedDuplicates > 0 ? `, skipped ${res.skippedDuplicates} duplicates` : ""}.`, "success");
+      const res = await api.post<{
+        imported: number;
+        skippedDuplicates: number;
+      }>(`/api/ws/${workspaceId}/dictionary/import/commit`, { rows });
+      toast.success(
+        `Imported ${res.imported} word${res.imported === 1 ? "" : "s"}${res.skippedDuplicates > 0 ? `, skipped ${res.skippedDuplicates} duplicates` : ""}.`,
+      );
       await onImported();
       onClose();
     } catch (err) {
@@ -429,9 +750,54 @@ function ImportDialog({ workspaceId, onClose, onImported }: { workspaceId: strin
   return (
     <Modal title="Import words" onClose={onClose}>
       <p className="bilingual">
-        CSV or JSON. CSV needs a <code>word</code> column — <button className="btn btn-ghost btn-sm" onClick={downloadTemplate}>download the template</button>.
+        CSV or JSON. CSV needs a <code>word</code> column;{" "}
+        <button className="btn btn-ghost btn-sm" onClick={downloadTemplate}>
+          download the template
+        </button>
+        .
       </p>
-      <Input type="file" accept=".csv,.json,text/csv,application/json" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
+      <div
+        className={`dropzone${dragOver ? " over" : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-label="Choose a CSV or JSON file, or drop one here"
+        onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) void onFile(file);
+        }}
+      >
+        <Upload size={20} aria-hidden="true" />
+        <div>
+          <strong>Choose a file</strong> or drop it here
+        </div>
+        <span className="field-hint">.csv or .json</span>
+      </div>
+      <Input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,.json,text/csv,application/json"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          // Reset so picking the same file again still fires change.
+          e.target.value = "";
+          if (file) void onFile(file);
+        }}
+      />
       {fileName && <p className="field-hint">{fileName}</p>}
 
       {busy && <Spinner />}
@@ -440,22 +806,46 @@ function ImportDialog({ workspaceId, onClose, onImported }: { workspaceId: strin
       {report && (
         <div style={{ marginTop: 16 }}>
           <h3>Preview</h3>
-          <div className="metrics" style={{ gridTemplateColumns: "repeat(4, 1fr)", margin: "12px 0" }}>
-            <div className="stat"><div className="stat-value">{report.validCount}</div><div className="stat-label">Ready to import</div></div>
-            <div className="stat"><div className="stat-value">{report.duplicatesInFile.length}</div><div className="stat-label">Duplicates in file</div></div>
-            <div className="stat"><div className="stat-value">{report.duplicatesInDictionary.length}</div><div className="stat-label">Already in dictionary</div></div>
-            <div className="stat"><div className="stat-value">{report.invalid.length}</div><div className="stat-label">Invalid rows</div></div>
+          <div
+            className="metrics"
+            style={{ gridTemplateColumns: "repeat(4, 1fr)", margin: "12px 0" }}
+          >
+            <div className="stat">
+              <div className="stat-value">{report.validCount}</div>
+              <div className="stat-label">Ready to import</div>
+            </div>
+            <div className="stat">
+              <div className="stat-value">{report.duplicatesInFile.length}</div>
+              <div className="stat-label">Duplicates in file</div>
+            </div>
+            <div className="stat">
+              <div className="stat-value">
+                {report.duplicatesInDictionary.length}
+              </div>
+              <div className="stat-label">Already in dictionary</div>
+            </div>
+            <div className="stat">
+              <div className="stat-value">{report.invalid.length}</div>
+              <div className="stat-label">Invalid rows</div>
+            </div>
           </div>
           {report.invalid.slice(0, 5).map((i) => (
-            <p key={i.row} className="error-text">Row {i.row} "{i.word}": {i.issues.join(", ")}</p>
+            <p key={i.row} className="error-text">
+              Row {i.row} "{i.word}": {i.issues.join(", ")}
+            </p>
           ))}
           {report.warnings.slice(0, 3).map((w, i) => (
-            <p key={i} className="bilingual">{w}</p>
+            <p key={i} className="bilingual">
+              {w}
+            </p>
           ))}
           <div className="modal-actions">
-            <Button variant="outline" onClick={onClose}>Close</Button>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
             <Button onClick={commit} disabled={busy || report.validCount === 0}>
-              Import {report.validCount} word{report.validCount === 1 ? "" : "s"}
+              Import {report.validCount} word
+              {report.validCount === 1 ? "" : "s"}
             </Button>
           </div>
         </div>

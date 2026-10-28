@@ -78,7 +78,7 @@ export function Login() {
         </>
       ) : (
         <>
-          <p className="bilingual">Use your organisation's SELISE Blocks account — there is no separate Lexora password.</p>
+          <p className="bilingual">Use your organisation's SELISE Blocks account; there is no separate Lexora password.</p>
           <Button type="button" disabled={!isLoginConfigured()} style={{ width: "100%" }} onClick={signIn}>
             Sign in with Blocks SSO
           </Button>

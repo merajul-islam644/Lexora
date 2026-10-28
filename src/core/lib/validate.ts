@@ -1,7 +1,13 @@
 import { badRequest } from "./errors.js";
-import type { ZodType } from "zod";
+import type { ZodType, output as ZodOutput } from "zod";
 
-export function parseBody<T>(schema: ZodType<T>, body: unknown): T {
+// S extends ZodType + z.output<S> (instead of ZodType<T>) so the parsed type
+// infers under every moduleResolution setting, including the web "Bundler"
+// one where ZodType<T> inference degrades to unknown.
+export function parseBody<S extends ZodType>(
+  schema: S,
+  body: unknown,
+): ZodOutput<S> {
   const result = schema.safeParse(body ?? {});
   if (!result.success) {
     throw badRequest("Please check the highlighted fields", result.error.issues.map((issue) => ({
@@ -9,7 +15,7 @@ export function parseBody<T>(schema: ZodType<T>, body: unknown): T {
       message: issue.message
     })));
   }
-  return result.data;
+  return result.data as ZodOutput<S>;
 }
 
 export function pageParams(query: Record<string, unknown>, defaultPageSize = 20, maxPageSize = 100): {

@@ -1,29 +1,6 @@
 import type { ExampleSentence, LearningStatus, LangSource, PartOfSpeech } from "../../shared/schemas.js";
 
-/* Row → DTO mappers. SQLite rows are snake_case; DTOs are camelCase for the API. */
-
-export interface UserRow {
-  id: string;
-  email: string;
-  password_hash: string;
-  email_verified_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export function toPublicUser(row: UserRow): {
-  id: string;
-  email: string;
-  emailVerified: boolean;
-  createdAt: string;
-} {
-  return {
-    id: row.id,
-    email: row.email,
-    emailVerified: Boolean(row.email_verified_at),
-    createdAt: row.created_at
-  };
-}
+/* Row → DTO mappers. Store rows are snake_case; DTOs are camelCase for the API. */
 
 export interface EntryRow {
   id: string;

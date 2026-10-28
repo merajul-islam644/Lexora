@@ -1,10 +1,15 @@
-import crypto from "node:crypto";
-
-/* Identity-free helpers shared by the function bundle and the SQLite store.
-   Split from connection.ts so pure-domain code never imports node:sqlite. */
+/* Identity-free helpers shared by the function bundle, the SQLite store and
+   the SPA's Gateway data layer. Pure: no Node imports, safe in the browser. */
 
 export function uid(): string {
-  return crypto.randomUUID();
+  const c = globalThis.crypto;
+  if (typeof c?.randomUUID === "function") return c.randomUUID();
+  // RFC4122 v4 fallback for runtimes without WebCrypto (older Node).
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export function nowIso(): string {

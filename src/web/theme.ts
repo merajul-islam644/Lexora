@@ -15,7 +15,12 @@ export function initTheme(): Theme {
   return theme;
 }
 
+/* Pieces that display the theme (top-bar toggle, Settings page) stay in sync
+   through this event: saveTheme() broadcasts every change. */
+export const THEME_EVENT = "lexora:theme";
+
 export function saveTheme(theme: Theme): void {
   localStorage.setItem(KEY, theme);
   applyTheme(theme);
+  window.dispatchEvent(new CustomEvent<Theme>(THEME_EVENT, { detail: theme }));
 }

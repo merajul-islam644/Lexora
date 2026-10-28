@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { makeTestEnv, call, createWorkspace, addEntry, type TestEnv } from "../helpers.js";
+import { makeTestEnv, createWorkspace, addEntry, type TestEnv } from "../helpers.js";
 import { applyReview, getPracticeQueue, getPracticeStats } from "../../src/core/services/practice.js";
 
 let env: TestEnv;
@@ -19,10 +19,10 @@ beforeAll(async () => {
     ["solven", "গোপনীয়", "confidential"],
     ["kairum", "অনুমোদন", "approval"]
   ]) {
-    entryIds.push(await addEntry(env, user, workspaceId, word, bn, en));
+    entryIds.push(await addEntry(env, workspaceId, word, bn, en));
   }
   // A second learner on the same dictionary: progress must be per-user.
-  // Membership keys on the email itself now -- no local user rows.
+  // Membership keys on the email itself -- no local user rows.
 });
 
 describe("spaced repetition math (SM-2 inspired)", () => {
@@ -62,10 +62,11 @@ describe("spaced repetition math (SM-2 inspired)", () => {
     expect(minutes).toBeLessThan(11);
   });
 
-  it("a scheduled word leaves the due queue; the reset one stays", async () => {
+  it("reviewed words leave the due queue until their window returns", async () => {
     const queue = await getPracticeQueue(env.store, workspaceId, user, "mixed", 10);
     expect(queue.some((q) => q.entryId === entryIds[0])).toBe(false); // reviewed → 1-day interval
-    expect(queue.some((q) => q.entryId === entryIds[1])).toBe(true); // incorrect → due in 10 min
+    expect(queue.some((q) => q.entryId === entryIds[1])).toBe(false); // incorrect → back in 10 minutes
+    expect(queue.some((q) => q.entryId === entryIds[2])).toBe(true); // never reviewed → due
   });
 
   it("caps the interval at 60 days", async () => {
@@ -79,9 +80,9 @@ describe("spaced repetition math (SM-2 inspired)", () => {
   it("stats reflect per-user progress", async () => {
     const stats = await getPracticeStats(env.store, workspaceId, user);
     expect(stats.total).toBe(3);
-    expect(stats.remembered).toBe(1);
-    expect(stats.needsRevision).toBe(1);
-    expect(stats.learning).toBe(1);
+    expect(stats.remembered).toBe(2); // [0] after 3 correct, [2] after 8
+    expect(stats.needsRevision).toBe(1); // [1]
+    expect(stats.learning).toBe(0);
     expect(stats.lastReviewedAt).not.toBeNull();
   });
 

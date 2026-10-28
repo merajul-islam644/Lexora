@@ -4,7 +4,9 @@ import {
   type ReactNode, type Ref, type TextareaHTMLAttributes
 } from "react";
 import { createPortal } from "react-dom";
+import { Toaster } from "sonner";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Inbox, Loader2, X } from "lucide-react";
+import { THEME_EVENT, type Theme } from "./theme.js";
 
 /* --------------------------------- buttons --------------------------------- */
 
@@ -313,6 +315,8 @@ export function Modal({
   wide?: boolean;
   actions?: ReactNode;
 }) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -321,9 +325,22 @@ export function Modal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // While open: lock the page behind the dialog and move focus onto the
+  // panel so keyboard users land inside it. On close, both are restored.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    const prevFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.focus();
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      prevFocus?.focus();
+    };
+  }, []);
+
   return (
     <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={panelRef} className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         <div className="card-title">
           <h2>{title}</h2>
           <Button variant="ghost" size="sm" className="btn-icon" onClick={onClose} aria-label="Close dialog">
@@ -450,4 +467,18 @@ export function SuccessLine({ children }: { children: ReactNode }) {
 
 export function InlineSpinner() {
   return <Loader2 size={15} className="spin" />;
+}
+
+/* Sonner's <Toaster>, mounted once at the app root. Toasts are pushed with
+   toast()/toast.success()/toast.error() imported from "sonner" directly — no
+   context needed. The theme follows the app's manual light/dark toggle via
+   the THEME_EVENT that saveTheme() broadcasts. */
+export function AppToaster() {
+  const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
+  useEffect(() => {
+    const onTheme = (e: Event) => setTheme((e as CustomEvent<Theme>).detail);
+    window.addEventListener(THEME_EVENT, onTheme);
+    return () => window.removeEventListener(THEME_EVENT, onTheme);
+  }, []);
+  return <Toaster theme={theme} position="bottom-right" richColors duration={2800} closeButton />;
 }
