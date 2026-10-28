@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Lightbulb } from "lucide-react";
 import { api, PARTS_OF_SPEECH } from "../api.js";
 import { useToast } from "../state.js";
-import { Badge, Button, EmptyState, Field, PageHeader, Select, Spinner, Textarea } from "../ui.js";
+import { Badge, Button, EmptyState, Field, LoadingScreen, PageHeader, Select, Textarea } from "../ui.js";
 
 type Workspace = { id: string; name: string; role: string };
 
@@ -303,7 +303,7 @@ function Phrasebook({ workspaceId }: { workspaceId: string }) {
     setItems((list) => list.filter((i) => i.id !== id));
   };
 
-  if (!loaded) return <Spinner />;
+  if (!loaded) return <LoadingScreen />;
   if (items.length === 0) return null;
 
   return (

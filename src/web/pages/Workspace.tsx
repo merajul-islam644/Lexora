@@ -4,7 +4,7 @@ import { ShieldAlert, Trash2, UserPlus } from "lucide-react";
 import { api, type PublicUser, type WorkspaceSummary } from "../api.js";
 import { useSession, useToast } from "../state.js";
 import { useBlocksAuth } from "../blocks-auth.js";
-import { Badge, Button, ConfirmDialog, Field, HonestNote, Input, PageHeader, Select, Spinner, Stat } from "../ui.js";
+import { Badge, Button, ConfirmDialog, Field, HonestNote, Input, LoadingScreen, PageHeader, Select, Stat } from "../ui.js";
 import { formatWhen } from "./Dashboard.js";
 
 type Workspace = { id: string; name: string; role: "owner" | "admin" | "editor" | "viewer" };
@@ -49,7 +49,7 @@ export function SecurityAccess({ workspace }: { workspace: Workspace }) {
     void load();
   }, [load]);
 
-  if (loading) return <Spinner />;
+  if (loading) return <LoadingScreen />;
 
   return (
     <div>
@@ -254,7 +254,7 @@ export function ActivityLog({ workspace }: { workspace: Workspace }) {
     void api.get<typeof data>(`/api/ws/${workspace.id}/activity?page=${page}&pageSize=25`).then((r) => r && setData(r));
   }, [workspace.id, page]);
 
-  if (!data) return <Spinner />;
+  if (!data) return <LoadingScreen />;
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
 
   return (

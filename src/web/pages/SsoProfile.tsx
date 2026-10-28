@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useBlocksAuth } from "../blocks-auth.js";
 import { loadSession } from "../lib/sso-bridge.js";
 import { useSession } from "../state.js";
-import { Button, ErrorNote, PageHeader, Spinner } from "../ui.js";
+import { Button, ErrorNote, LoadingScreen, PageHeader } from "../ui.js";
 
 /* Shows the signed-in user's Blocks session claims and a sign-out button.
    Not part of the local-session /app area -- this page is the debug view
@@ -16,7 +16,7 @@ export function SsoProfile() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (status === "loading") return <Spinner />;
+  if (status === "loading") return <LoadingScreen />;
   if (status === "unauthenticated") return <Navigate to="/login" replace />;
 
   const continueToApp = async () => {

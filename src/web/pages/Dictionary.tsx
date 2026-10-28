@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Archive, ArchiveRestore, Download, FileUp, Pencil, Plus, Search } from "lucide-react";
 import { api, downloadFile, PARTS_OF_SPEECH, type EntryDTO, type ImportReport } from "../api.js";
 import { useSession, useToast } from "../state.js";
-import { Badge, Button, ConfirmDialog, EmptyState, ErrorNote, Field, Input, Modal, PageHeader, Select, SourceBadge, Spinner, StatusBadge, Textarea } from "../ui.js";
+import { Badge, Button, ConfirmDialog, EmptyState, ErrorNote, Field, Input, LoadingScreen, Modal, PageHeader, Select, SourceBadge, Spinner, StatusBadge, Textarea } from "../ui.js";
 
 type Workspace = { id: string; name: string; role: "owner" | "admin" | "editor" | "viewer" };
 
@@ -152,7 +152,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
       </div>
 
       {!data && loading ? (
-        <Spinner />
+        <LoadingScreen />
       ) : !data || data.items.length === 0 ? (
         <EmptyState
           title={q || pos || source ? "No words match" : "Your dictionary is empty"}

@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import { BookOpen, Eye, KeyRound, Languages, Lock, Sparkles, Users } from "lucide-react";
-import { PublicLayout } from "../Layout.js";
 
+/* Header/footer come from the route-level <PublicLayout /> in main.tsx --
+   these pages render their sections only. */
 export function Landing() {
   return (
-    <PublicLayout>
+    <>
       <section className="hero">
         <span className="eyebrow">A private language for your business</span>
         <h1>Invent a language your team actually owns.</h1>
@@ -61,13 +62,13 @@ export function Landing() {
           </div>
         </div>
       </section>
-    </PublicLayout>
+    </>
   );
 }
 
 export function Features() {
   return (
-    <PublicLayout>
+    <>
       <section className="hero" style={{ paddingBottom: 24 }}>
         <span className="eyebrow">Features</span>
         <h1>Everything a private language needs</h1>
@@ -106,13 +107,13 @@ export function Features() {
           </div>
         </div>
       </section>
-    </PublicLayout>
+    </>
   );
 }
 
 export function SecurityPage() {
   return (
-    <PublicLayout>
+    <>
       <section className="hero" style={{ paddingBottom: 24 }}>
         <span className="eyebrow">Security & privacy</span>
         <h1>Private by design — and honest about limits</h1>
@@ -153,6 +154,6 @@ export function SecurityPage() {
           </div>
         </div>
       </section>
-    </PublicLayout>
+    </>
   );
 }

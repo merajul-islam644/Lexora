@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Eye, X } from "lucide-react";
 import { api, PRACTICE_MODES } from "../api.js";
 import { useToast } from "../state.js";
-import { Badge, Button, EmptyState, PageHeader, Stat, StatusBadge } from "../ui.js";
+import { Badge, Button, EmptyState, LoadingScreen, PageHeader, Stat, StatusBadge } from "../ui.js";
 
 type Workspace = { id: string; name: string; role: string };
 
@@ -94,7 +94,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
     }
   };
 
-  if (loading) return <div className="spinner" role="status" aria-label="Loading practice queue" />;
+  if (loading) return <LoadingScreen />;
 
   const current = items[index];
 

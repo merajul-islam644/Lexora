@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { api } from "../api.js";
 import { useSession, useToast } from "../state.js";
-import { Button, ErrorNote, Field, Input, PageHeader } from "../ui.js";
+import { Button, ErrorNote, Field, Input, LoadingScreen, PageHeader } from "../ui.js";
 
 /* ------------------------- first-run: create workspace ----------------------- */
 
@@ -114,7 +114,7 @@ export function Dashboard() {
   }, []);
 
   if (error) return <ErrorNote message={error} />;
-  if (!data) return <div className="spinner" role="status" aria-label="Loading dashboard" />;
+  if (!data) return <LoadingScreen />;
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";

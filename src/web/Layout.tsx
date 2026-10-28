@@ -8,7 +8,7 @@ import { useSession, useActiveWorkspace, useToast } from "./state.js";
 import { saveTheme, type Theme } from "./theme.js";
 import { useBlocksAuth } from "./blocks-auth.js";
 import { api } from "./api.js";
-import { Spinner } from "./ui.js";
+import { LoadingScreen } from "./ui.js";
 
 export function BrandMark({ light }: { light?: boolean }) {
   return (
@@ -66,7 +66,7 @@ const NAV = [
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { loading, user } = useSession();
-  if (loading) return <Spinner />;
+  if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   return children;
 }

@@ -248,7 +248,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .public-footer { border-top: 1px solid var(--border); padding: 24px 32px; text-align: center; color: var(--text-muted); font-size: 13px; }
 
 /* ---------------------------------- auth ----------------------------------- */
-.auth-page { display: flex; align-items: flex-start; justify-content: center; padding: 56px 16px; }
+.auth-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 48px 16px; }
+/* Inside the app shell (welcome screen), center below the topbar instead of the viewport. */
+.content .auth-page { min-height: calc(100vh - 64px); }
 .auth-card { width: 100%; max-width: 420px; }
 .auth-card .brand { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 20px; font-weight: 700; font-size: 20px; color: var(--primary); }
 .auth-alt { text-align: center; font-size: 14px; color: var(--text-muted); margin-top: 16px; }
@@ -278,6 +280,10 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 
 /* ---------------------------------- misc ----------------------------------- */
 .spinner { width: 22px; height: 22px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 24px auto; }
+.loading-screen { min-height: 100vh; display: grid; place-items: center; }
+/* Inside the app shell, center within the visible area below the topbar
+   instead of the full viewport. */
+.content .loading-screen { min-height: calc(100vh - 64px); }
 .spin { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty { text-align: center; color: var(--text-muted); padding: 40px 16px; }

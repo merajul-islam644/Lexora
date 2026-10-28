@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, CircleDashed, Loader2, RotateCcw } from "lucide-react";
 import { api, type GrammarData, type JobState, type LanguageSummary } from "../api.js";
 import { useSession, useToast } from "../state.js";
-import { Badge, Button, ConfirmDialog, EmptyState, ErrorNote, Field, HonestNote, Input, Modal, PageHeader, Select, Spinner, Stat } from "../ui.js";
+import { Badge, Button, ConfirmDialog, EmptyState, ErrorNote, Field, HonestNote, Input, LoadingScreen, Modal, PageHeader, Select, Stat } from "../ui.js";
 import { formatWhen } from "./Dashboard.js";
 import { GEN_STYLES } from "../api.js";
 
@@ -81,7 +81,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
     return () => window.clearInterval(pollRef.current ?? undefined);
   }, [job, workspace.id, load, toast]);
 
-  if (loading) return <Spinner />;
+  if (loading) return <LoadingScreen />;
 
   return (
     <div>

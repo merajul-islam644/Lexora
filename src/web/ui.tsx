@@ -151,6 +151,16 @@ export function Spinner() {
   return <div className="spinner" role="status" aria-label="Loading" />;
 }
 
+/* Page-level wait (session boot, auth guard): fills the viewport and centers
+   the spinner instead of pinning it to the top of an empty page. */
+export function LoadingScreen() {
+  return (
+    <div className="loading-screen">
+      <Spinner />
+    </div>
+  );
+}
+
 export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; title: string; body?: string; action?: ReactNode }) {
   return (
     <div className="empty">
