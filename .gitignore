@@ -1,0 +1,9 @@
+node_modules/
+npm-cache/
+*.log
+.env
+.cert/
+dist-web/
+dist-function/
+data/
+.playwright-mcp/
