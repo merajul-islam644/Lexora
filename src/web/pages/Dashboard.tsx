@@ -39,7 +39,7 @@ export function Welcome() {
     <div className="auth-page">
       <div className="auth-card" style={{ maxWidth: 480 }}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <h1 style={{ fontSize: 24 }}>Welcome, {user?.email.split("@")[0] ?? "there"}!</h1>
+          <h1 style={{ fontSize: 24 }}>Welcome, {user?.name || user?.email.split("@")[0] || "there"}!</h1>
           <p className="bilingual">Create your first workspace — a private home for your dictionary and language.</p>
         </div>
         <div className="card">
@@ -87,6 +87,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export function Dashboard() {
+  const { user } = useSession();
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,7 +119,7 @@ export function Dashboard() {
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const name = data.workspace.name;
+  const name = user?.name || user?.email.split("@")[0] || "there";
 
   return (
     <div>

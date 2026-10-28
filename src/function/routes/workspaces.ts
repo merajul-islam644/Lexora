@@ -33,7 +33,13 @@ export async function workspaceSummary(store: ApiDeps["store"], userEmail: strin
 /** GET me -- the SessionProvider bootstrap: identity + visible workspaces. */
 export async function getMe(deps: ApiDeps, req: ApiRequest): Promise<ApiResponse> {
   return ok({
-    user: { id: req.userEmail, email: req.userEmail, emailVerified: true, createdAt: "" },
+    user: {
+      id: req.userEmail,
+      email: req.userEmail,
+      name: req.userDisplayName ?? "",
+      emailVerified: true,
+      createdAt: ""
+    },
     workspaces: await workspaceSummary(deps.store, req.userEmail)
   });
 }

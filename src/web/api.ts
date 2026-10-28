@@ -98,6 +98,8 @@ export async function downloadFile(path: string): Promise<void> {
 export interface PublicUser {
   id: string;
   email: string;
+  /** IAM display name; empty when the token carries no name claim. */
+  name?: string;
   emailVerified: boolean;
   createdAt: string;
 }

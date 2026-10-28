@@ -15,6 +15,9 @@ export interface ApiRequest {
   query: Record<string, string>;
   body: unknown;
   userEmail: string;
+  /** IAM display name for the caller, when the token carries one; the /me
+     route surfaces it for greetings. Optional so tests can omit it. */
+  userDisplayName?: string;
 }
 
 export interface ApiResponse {
