@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Activity, BookOpen, BookMarked, Languages, LayoutDashboard, LogOut, Menu, Moon, RefreshCw,
-  Settings, Shield, Sparkles, Sun, User, X
+  Activity, BookOpen, BookMarked, ChevronsLeft, ChevronsRight, Languages, LayoutDashboard, LogOut, Menu, Moon, RefreshCw,
+  Settings, Shield, Sparkles, Sun, User
 } from "lucide-react";
 import { useSession, useActiveWorkspace, useToast } from "./state.js";
 import { saveTheme, type Theme } from "./theme.js";
 import { useBlocksAuth } from "./blocks-auth.js";
 import { api } from "./api.js";
-import { LoadingScreen } from "./ui.js";
+import { LoadingScreen, Select } from "./ui.js";
 
 export function BrandMark({ light }: { light?: boolean }) {
   return (
@@ -75,6 +75,9 @@ export function AppShell() {
   const { user, workspaces, refresh, avatarUrl } = useSession();
   const [active, select] = useActiveWorkspace(workspaces);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Desktop sidebar rail: collapsed hides the labels (icons only), persisted
+  // like the active workspace. On drawer widths the toggle just closes it.
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("lexora.sidebarCollapsed") === "1");
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme === "dark" ? "dark" : "light"));
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -141,20 +144,37 @@ export function AppShell() {
     saveTheme(next);
   };
 
+  const toggleSidebar = () => {
+    if (window.innerWidth <= 900) {
+      setDrawerOpen(false);
+      return;
+    }
+    setCollapsed((v) => {
+      localStorage.setItem("lexora.sidebarCollapsed", v ? "0" : "1");
+      return !v;
+    });
+  };
+
   return (
     <div className="shell">
       {drawerOpen && <div className="scrim" onClick={() => setDrawerOpen(false)} />}
-      <aside className={`sidebar ${drawerOpen ? "open" : ""}`} aria-label="Main navigation">
+      <aside className={`sidebar ${drawerOpen ? "open" : ""} ${collapsed ? "collapsed" : ""}`} aria-label="Main navigation">
         <div className="sidebar-brand">
           <BrandMark />
-          <button className="btn btn-ghost btn-icon" style={{ marginLeft: "auto", color: "var(--text)" }} onClick={() => setDrawerOpen(false)} aria-label="Close menu">
-            <X size={18} />
+          <button
+            className="btn btn-ghost btn-icon"
+            style={{ marginLeft: "auto", color: "var(--text)" }}
+            onClick={toggleSidebar}
+            aria-label={collapsed ? "Expand sidebar" : "Minimize sidebar"}
+            title={collapsed ? "Expand sidebar" : "Minimize sidebar"}
+          >
+            {collapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
           </button>
         </div>
         <nav className="sidebar-nav">
           {NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} className={({ isActive }) => (isActive ? "active" : "")}>
-              <Icon size={17} /> {label}
+            <NavLink key={to} to={to} className={({ isActive }) => (isActive ? "active" : "")} title={label}>
+              <Icon size={17} /> <span className="nav-label">{label}</span>
             </NavLink>
           ))}
         </nav>
@@ -169,18 +189,13 @@ export function AppShell() {
           <button className="btn btn-outline btn-icon menu-btn" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
             <Menu size={18} />
           </button>
-          <select
-            className="select"
-            value={active.id}
-            onChange={(e) => select(e.target.value)}
-            aria-label="Switch workspace"
-          >
+          <Select value={active.id} onChange={(v) => select(v)} aria-label="Switch workspace">
             {workspaces.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.name}
               </option>
             ))}
-          </select>
+          </Select>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             <button
               type="button"

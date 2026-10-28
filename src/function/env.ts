@@ -3,5 +3,5 @@
    (see scripts/build-function.mjs). */
 export const env = {
   apiUrl: process.env.VITE_BLOCKS_API_URL ?? "",
-  xBlocksKey: process.env.VITE_BLOCKS_X_BLOCKS_KEY ?? ""
+  xBlocksKey: process.env.VITE_BLOCKS_X_BLOCKS_KEY ?? "",
 };

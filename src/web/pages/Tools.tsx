@@ -83,7 +83,7 @@ export function WordBuilder({ workspace }: { workspace: Workspace }) {
             <input className="input" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="e.g. deadline / শেষ সময়" required maxLength={200} />
           </Field>
           <Field label="Part of speech">
-            <Select value={pos} onChange={(e) => setPos(e.target.value)}>
+            <Select value={pos} onChange={(v) => setPos(v)}>
               {PARTS_OF_SPEECH.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
@@ -213,14 +213,14 @@ export function TranslationLab({ workspace }: { workspace: Workspace }) {
         <form onSubmit={translate} noValidate>
           <div className="form-row" style={{ maxWidth: 420 }}>
             <Field label="From">
-              <Select value={from} onChange={(e) => setFrom(e.target.value)}>
+              <Select value={from} onChange={(v) => setFrom(v)}>
                 {LANGS.map((l) => (
                   <option key={l.value} value={l.value}>{l.label}</option>
                 ))}
               </Select>
             </Field>
             <Field label="To">
-              <Select value={to} onChange={(e) => setTo(e.target.value)}>
+              <Select value={to} onChange={(v) => setTo(v)}>
                 {LANGS.map((l) => (
                   <option key={l.value} value={l.value}>{l.label}</option>
                 ))}

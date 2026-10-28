@@ -109,12 +109,48 @@ code { background: var(--accent-soft); color: var(--primary); border-radius: 6px
 /* ----------------------------------- forms --------------------------------- */
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
 .field > label { font-size: 13px; font-weight: 600; color: var(--primary); }
-.input, .select, .textarea {
+.input, .textarea {
   font: inherit; color: var(--text); background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 9px 12px; width: 100%;
 }
-.input:focus, .select:focus, .textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.input:focus, .textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Select is a custom dropdown (.dd wrapper); .select marks the wrapper so the
+   field-layout width rules (below) keep applying to it. */
+.select.dd { width: 100%; }
+.dd-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 9px 12px; cursor: pointer; text-align: left;
+}
+.dd-trigger:focus-visible, .dd-trigger[aria-expanded="true"] {
+  border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.dd-trigger:disabled { opacity: 0.55; cursor: not-allowed; }
+.dd-value { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dd-caret { flex-shrink: 0; color: var(--text-muted); transition: transform 0.15s ease; }
+.dd-caret.up { transform: rotate(180deg); }
+/* Select's menu renders in a body portal and is pinned to the trigger by JS
+   (see ui.tsx) — only its visuals live here. position: fixed so no ancestor
+   (sticky topbar, modal scrim, overflow table wrappers) can displace or clip
+   it; z-index clears the modal scrim (100) and toasts (200). */
+.dd-menu {
+  position: fixed; z-index: 300;
+  max-width: min(320px, calc(100vw - 16px));
+  overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow); padding: 4px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.dd-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border-radius: 6px; font-size: 14px; color: var(--text);
+  cursor: pointer; white-space: nowrap;
+}
+.dd-option:hover, .dd-option.active { background: var(--background); }
+.dd-option.selected { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.dd-option-label { overflow: hidden; text-overflow: ellipsis; }
 .textarea { resize: vertical; min-height: 80px; }
 .field-hint { font-size: 12px; color: var(--text-muted); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -157,7 +193,9 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   border-right: 1px solid var(--border); color: var(--text);
   display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh;
 }
-.sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 20px 20px 14px; font-weight: 700; font-size: 18px; color: var(--primary); }
+/* Brand row and topbar share one fixed height so their border-bottoms read
+   as a single continuous line across sidebar and content. */
+.sidebar-brand { display: flex; align-items: center; gap: 10px; height: 64px; flex-shrink: 0; padding: 0 20px; font-weight: 700; font-size: 18px; color: var(--primary); border-bottom: 1px solid var(--border); }
 .sidebar-nav { flex: 1; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .sidebar-nav a {
   display: flex; align-items: center; gap: 10px; color: var(--text-muted);
@@ -168,14 +206,28 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .sidebar-footer { padding: 14px 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-muted); }
 .sidebar-footer .ws-name { font-weight: 600; color: var(--text); }
 
+/* Desktop-only icon rail: the toggle in the brand row collapses the sidebar
+   to its icons; labels (and the brand word) hide via font/display so the
+   drawer widths below always render expanded. */
+@media (min-width: 901px) {
+  .sidebar.collapsed { width: 68px; }
+  .sidebar.collapsed .sidebar-brand { padding-left: 0; padding-right: 0; justify-content: center; gap: 8px; }
+  .sidebar.collapsed .sidebar-brand .brand { font-size: 0; }
+  .sidebar.collapsed .sidebar-nav { padding-left: 0; padding-right: 0; }
+  .sidebar.collapsed .sidebar-nav a { justify-content: center; padding-left: 0; padding-right: 0; }
+  .sidebar.collapsed .nav-label { display: none; }
+  .sidebar.collapsed .sidebar-footer { display: none; }
+}
+
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
-  display: flex; align-items: center; gap: 12px; padding: 14px 28px;
+  display: flex; align-items: center; gap: 12px; height: 64px; padding: 0 28px;
   background: var(--surface); border-bottom: 1px solid var(--border);
   position: sticky; top: 0; z-index: 20;
 }
 .topbar h1 { font-size: 18px; margin: 0; flex: 1; }
-.topbar select { width: auto; }
+.topbar .select { width: auto; }
+.topbar .select .dd-trigger { max-width: 240px; }
 .avatar-menu { position: relative; }
 .avatar-btn {
   width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
@@ -222,7 +274,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .sidebar.open { transform: translateX(0); }
   .menu-btn { display: inline-flex; }
   .content { padding: 16px; }
-  .topbar { padding: 12px 16px; }
+  .topbar { padding: 0 16px; }
 }
 .scrim { position: fixed; inset: 0; background: rgba(23, 32, 51, 0.4); z-index: 40; }
 
@@ -317,6 +369,10 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 }
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
 .toolbar .input, .toolbar .select { width: auto; }
+/* A custom trigger sizes to its current label, unlike a native select which
+   sizes to its widest option — pin the toolbar filters so they don't jitter
+   when the value changes. */
+.toolbar .select .dd-trigger { min-width: 170px; }
 .toolbar .grow { flex: 1; min-width: 180px; }
 .pagination { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 14px; font-size: 13px; color: var(--text-muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }

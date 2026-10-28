@@ -1,5 +1,10 @@
-import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type Ref, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
-import { AlertTriangle, CheckCircle2, Inbox, Loader2, X } from "lucide-react";
+import {
+  Children, isValidElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
+  type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode, type Ref, type TextareaHTMLAttributes
+} from "react";
+import { createPortal } from "react-dom";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, Inbox, Loader2, X } from "lucide-react";
 
 /* --------------------------------- buttons --------------------------------- */
 
@@ -34,8 +39,232 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={`textarea ${props.className ?? ""}`} {...props} />;
 }
 
-export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={`select ${props.className ?? ""}`} {...props} />;
+/* ------------------------------- dropdown ---------------------------------- */
+
+type SelectOption = { value: string; label: ReactNode };
+
+type SelectProps = {
+  value: string;
+  onChange: (value: string) => void;
+  /** Plain `<option value="…">label</option>` elements — parsed, not rendered. */
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  disabled?: boolean;
+  "aria-label"?: string;
+};
+
+/* Fixed-position menu geometry, measured from the trigger. */
+type MenuPos = {
+  left: number;
+  edgeRight: number;
+  top?: number;
+  bottom?: number;
+  minWidth: number;
+  maxHeight: number;
+};
+
+const MENU_GAP = 4;
+const MENU_MAX_H = 280;
+const EDGE = 8;
+
+/* A custom listbox dropdown: the native <select> renders its menu with OS
+   chrome we can't style (it ignores the dark theme), so the trigger and menu
+   are drawn by the app instead. The menu renders in a body portal pinned to
+   the trigger's viewport position, so sticky headers, modal scrims and table
+   wrappers with overflow can neither displace nor clip it. The trigger keeps
+   keyboard focus (the aria-activedescendant pattern) and handles the full
+   keyboard model: arrows, Home/End, Enter/Space to pick, Escape/Tab to
+   dismiss. Near the viewport bottom the menu flips above the trigger; near
+   the right edge it right-aligns instead of leaving the screen. */
+export function Select({ value, onChange, children, className, style, disabled, "aria-label": ariaLabel }: SelectProps) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const [menuPos, setMenuPos] = useState<MenuPos | null>(null);
+  const [flipX, setFlipX] = useState(false);
+  const id = useId();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const options = useMemo(
+    () =>
+      Children.toArray(children).flatMap((child): SelectOption[] =>
+        isValidElement(child) && child.type === "option"
+          ? [{
+              value: String((child.props as { value?: string }).value ?? ""),
+              label: (child.props as { children?: ReactNode }).children
+            }]
+          : []
+      ),
+    [children]
+  );
+  const current = options.find((o) => o.value === value);
+
+  // Pin the menu to the trigger's viewport rect: drop-down by default,
+  // drop-up when the space below can't fit the menu and there is more room
+  // above, height capped to what the chosen side actually has.
+  const place = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const spaceBelow = window.innerHeight - rect.bottom - EDGE;
+    const spaceAbove = rect.top - EDGE;
+    const up = spaceBelow < MENU_MAX_H && spaceAbove > spaceBelow;
+    setMenuPos({
+      left: rect.left,
+      edgeRight: window.innerWidth - rect.right,
+      top: up ? undefined : rect.bottom + MENU_GAP,
+      bottom: up ? window.innerHeight - rect.top + MENU_GAP : undefined,
+      minWidth: rect.width,
+      maxHeight: Math.max(140, Math.min(MENU_MAX_H, (up ? spaceAbove : spaceBelow) - MENU_GAP))
+    });
+  };
+
+  const openMenu = () => {
+    if (disabled || options.length === 0) return;
+    place();
+    setFlipX(false);
+    setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+    setOpen(true);
+  };
+
+  const close = (refocus = false) => {
+    setOpen(false);
+    setActive(-1);
+    if (refocus) triggerRef.current?.focus();
+  };
+
+  const commit = (v: string) => {
+    close(true);
+    if (v !== value) onChange(v);
+  };
+
+  // Dismiss on any click outside the trigger and the portaled menu.
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      close();
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  // Re-pin the menu while anything scrolls or the window resizes.
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
+  // Keep the highlighted or selected option in view once the menu opens.
+  useEffect(() => {
+    if (!open) return;
+    const el =
+      menuRef.current?.querySelector(`#${CSS.escape(id)}-opt-${active}`) ??
+      menuRef.current?.querySelector('[aria-selected="true"]');
+    el?.scrollIntoView({ block: "nearest" });
+  }, [open, active, id]);
+
+  // Once rendered, right-align the menu if it would leave the viewport.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const menu = menuRef.current;
+    if (!menu) return;
+    setFlipX(menu.getBoundingClientRect().right > window.innerWidth - EDGE);
+  }, [open, menuPos]);
+
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openMenu();
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive((i) => Math.min(options.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((i) => Math.max(0, i - 1));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setActive(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setActive(options.length - 1);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const picked = options[active];
+      if (picked) commit(picked.value);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close(true);
+    } else if (e.key === "Tab") {
+      close();
+    }
+  };
+
+  return (
+    <div ref={rootRef} className={`dd select ${className ?? ""}`} style={style}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="dd-trigger"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        aria-activedescendant={open && active >= 0 ? `${id}-opt-${active}` : undefined}
+        onClick={() => (open ? close() : openMenu())}
+        onKeyDown={onKeyDown}
+      >
+        <span className="dd-value">{current?.label ?? ""}</span>
+        <ChevronDown size={15} aria-hidden="true" className={`dd-caret${open ? " up" : ""}`} />
+      </button>
+      {open && menuPos && createPortal(
+        <div
+          className="dd-menu"
+          role="listbox"
+          aria-label={ariaLabel}
+          ref={menuRef}
+          style={{
+            left: flipX ? undefined : menuPos.left,
+            right: flipX ? menuPos.edgeRight : undefined,
+            top: menuPos.top,
+            bottom: menuPos.bottom,
+            minWidth: menuPos.minWidth,
+            maxHeight: menuPos.maxHeight
+          }}
+        >
+          {options.map((o, i) => (
+            <div
+              key={o.value}
+              id={`${id}-opt-${i}`}
+              role="option"
+              aria-selected={o.value === value}
+              className={`dd-option${i === active ? " active" : ""}${o.value === value ? " selected" : ""}`}
+              onMouseEnter={() => setActive(i)}
+              // Don't pull focus off the trigger on mousedown — it drives the keyboard.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => commit(o.value)}
+            >
+              <span className="dd-option-label">{o.label}</span>
+              {o.value === value && <Check size={14} aria-hidden="true" />}
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
 }
 
 /* ---------------------------------- badges ---------------------------------- */

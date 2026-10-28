@@ -77,7 +77,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<EntryDTO | "new" | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
+  const [ioOpen, setIoOpen] = useState<"import" | "export" | null>(null);
   const { workspaces } = useSession();
   const role = workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
   const canWrite = role === "owner" || role === "admin" || role === "editor";
@@ -114,8 +114,13 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
         subtitle={`${data?.total ?? "…"} words · Bengali and English references are kept with every word.`}
         actions={
           <>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <FileUp size={15} /> Import / Export
+            {canWrite && (
+              <Button variant="outline" onClick={() => setIoOpen("import")}>
+                <FileUp size={15} /> Import
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setIoOpen("export")}>
+              <Download size={15} /> Export
             </Button>
             {canWrite && (
               <Button onClick={() => setEditing("new")}>
@@ -131,19 +136,19 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
           <Search size={15} style={{ position: "absolute", left: 10, top: 11, color: "var(--text-muted)" }} />
           <Input placeholder="Search word, বাংলা or English…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} style={{ paddingLeft: 32 }} aria-label="Search dictionary" />
         </div>
-        <Select value={pos} onChange={(e) => { setPos(e.target.value); setPage(1); }} aria-label="Filter by part of speech">
+        <Select value={pos} onChange={(v) => { setPos(v); setPage(1); }} aria-label="Filter by part of speech">
           <option value="">All parts of speech</option>
           {PARTS_OF_SPEECH.map((p) => (
             <option key={p} value={p}>{p}</option>
           ))}
         </Select>
-        <Select value={source} onChange={(e) => { setSource(e.target.value); setPage(1); }} aria-label="Filter by source">
+        <Select value={source} onChange={(v) => { setSource(v); setPage(1); }} aria-label="Filter by source">
           <option value="">All sources</option>
           <option value="user">Your words</option>
           <option value="generated">Generated drafts</option>
           <option value="imported">Imported</option>
         </Select>
-        <Select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort order">
+        <Select value={sort} onChange={(v) => setSort(v)} aria-label="Sort order">
           <option value="alpha">A → Z</option>
           <option value="newest">Newest first</option>
           <option value="updated">Recently updated</option>
@@ -224,7 +229,8 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
         />
       )}
 
-      {importOpen && <ImportExportDialog workspaceId={workspace.id} canWrite={canWrite} onClose={() => setImportOpen(false)} onImported={load} />}
+      {ioOpen === "export" && <ExportDialog workspaceId={workspace.id} onClose={() => setIoOpen(null)} />}
+      {ioOpen === "import" && <ImportDialog workspaceId={workspace.id} onClose={() => setIoOpen(null)} onImported={load} />}
     </div>
   );
 }
@@ -240,7 +246,7 @@ function EditDialog({ workspaceId, entry, onClose, onSaved }: { workspaceId: str
 
   useEffect(() => firstInput.current?.focus(), []);
 
-  const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+  const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const submit = async (e: React.FormEvent) => {
@@ -271,7 +277,7 @@ function EditDialog({ workspaceId, entry, onClose, onSaved }: { workspaceId: str
             <Input ref={firstInput} value={form.word} onChange={set("word")} required maxLength={80} placeholder="e.g. vethra" />
           </Field>
           <Field label="Part of speech">
-            <Select value={form.partOfSpeech} onChange={set("partOfSpeech")}>
+            <Select value={form.partOfSpeech} onChange={(v) => setForm((f) => ({ ...f, partOfSpeech: v }))}>
               {PARTS_OF_SPEECH.map((p) => (
                 <option key={p} value={p}>{p}</option>
               ))}
@@ -351,7 +357,23 @@ function ArchiveButton({ workspaceId, entry, onDone }: { workspaceId: string; en
 
 /* ------------------------------ import / export ------------------------------ */
 
-function ImportExportDialog({ workspaceId, canWrite, onClose, onImported }: { workspaceId: string; canWrite: boolean; onClose: () => void; onImported: () => Promise<void> }) {
+function ExportDialog({ workspaceId, onClose }: { workspaceId: string; onClose: () => void }) {
+  return (
+    <Modal title="Export dictionary" onClose={onClose}>
+      <p className="bilingual">Download the whole dictionary (archived words excluded). Exports are recorded in your activity log.</p>
+      <div style={{ display: "flex", gap: 10 }}>
+        <Button variant="outline" onClick={() => void downloadFile(`/api/ws/${workspaceId}/dictionary/export?format=csv`)}>
+          <Download size={15} /> CSV
+        </Button>
+        <Button variant="outline" onClick={() => void downloadFile(`/api/ws/${workspaceId}/dictionary/export?format=json`)}>
+          <Download size={15} /> JSON
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+function ImportDialog({ workspaceId, onClose, onImported }: { workspaceId: string; onClose: () => void; onImported: () => Promise<void> }) {
   const [report, setReport] = useState<ImportReport | null>(null);
   const [rows, setRows] = useState<Array<Record<string, string>>>([]);
   const [fileName, setFileName] = useState("");
@@ -405,31 +427,12 @@ function ImportExportDialog({ workspaceId, canWrite, onClose, onImported }: { wo
   };
 
   return (
-    <Modal title="Import / Export" onClose={onClose} wide>
-      <div className="grid-2">
-        <div>
-          <h3>Export</h3>
-          <p className="bilingual">Download the whole dictionary (archived words excluded). Exports are recorded in your activity log.</p>
-          <div style={{ display: "flex", gap: 10 }}>
-            <Button variant="outline" onClick={() => void downloadFile(`/api/ws/${workspaceId}/dictionary/export?format=csv`)}>
-              <Download size={15} /> CSV
-            </Button>
-            <Button variant="outline" onClick={() => void downloadFile(`/api/ws/${workspaceId}/dictionary/export?format=json`)}>
-              <Download size={15} /> JSON
-            </Button>
-          </div>
-        </div>
-        {canWrite && (
-          <div>
-            <h3>Import</h3>
-            <p className="bilingual">
-              CSV or JSON. CSV needs a <code>word</code> column — <button className="btn btn-ghost btn-sm" onClick={downloadTemplate}>download the template</button>.
-            </p>
-            <Input type="file" accept=".csv,.json,text/csv,application/json" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
-            {fileName && <p className="field-hint">{fileName}</p>}
-          </div>
-        )}
-      </div>
+    <Modal title="Import words" onClose={onClose}>
+      <p className="bilingual">
+        CSV or JSON. CSV needs a <code>word</code> column — <button className="btn btn-ghost btn-sm" onClick={downloadTemplate}>download the template</button>.
+      </p>
+      <Input type="file" accept=".csv,.json,text/csv,application/json" onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
+      {fileName && <p className="field-hint">{fileName}</p>}
 
       {busy && <Spinner />}
       <ErrorNote message={error} />

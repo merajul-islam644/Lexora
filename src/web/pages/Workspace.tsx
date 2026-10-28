@@ -158,7 +158,7 @@ function AddMemberButton({ workspaceId, onAdded }: { workspaceId: string; onAdde
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </Field>
               <Field label="Role">
-                <Select value={role} onChange={(e) => setRole(e.target.value)}>
+                <Select value={role} onChange={(v) => setRole(v)}>
                   {ROLES.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
@@ -182,9 +182,9 @@ function RoleSelect({ workspaceId, userId, current, onDone }: { workspaceId: str
   return (
     <Select
       value={current}
-      onChange={async (e) => {
+      onChange={async (v) => {
         try {
-          await api.patch(`/api/ws/${workspaceId}/members/${userId}`, { role: e.target.value });
+          await api.patch(`/api/ws/${workspaceId}/members/${userId}`, { role: v });
           toast("Role updated.", "success");
           await onDone();
         } catch (err) {

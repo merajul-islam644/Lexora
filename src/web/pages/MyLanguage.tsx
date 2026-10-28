@@ -300,7 +300,7 @@ function GenerateDialog({
           <Input value={preferredName} onChange={(e) => setPreferredName(e.target.value)} maxLength={40} placeholder="e.g. Nerava" />
         </Field>
         <Field label="Style">
-          <Select value={style} onChange={(e) => setStyle(e.target.value)}>
+          <Select value={style} onChange={(v) => setStyle(v)}>
             {GEN_STYLES.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -309,7 +309,7 @@ function GenerateDialog({
           </Select>
         </Field>
         <Field label="Reference languages">
-          <Select value={referenceLangs} onChange={(e) => setReferenceLangs(e.target.value)}>
+          <Select value={referenceLangs} onChange={(v) => setReferenceLangs(v)}>
             <option value="both">Bengali + English</option>
             <option value="bengali">Bengali</option>
             <option value="english">English</option>
