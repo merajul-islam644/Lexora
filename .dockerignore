@@ -1,0 +1,12 @@
+node_modules
+npm-cache
+data
+.cert
+.env
+dist-web
+dist-function
+dist-server
+.playwright-mcp
+.git
+*.log
+*.png
