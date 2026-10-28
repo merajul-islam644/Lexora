@@ -166,4 +166,10 @@ export interface DataStore {
   getProgress(userId: string, entryId: string): Promise<ProgressRow | undefined>;
   upsertProgress(row: ProgressRow): Promise<void>;
   listProgress(workspaceId: string, userId: string): Promise<ProgressRow[]>;
+
+  /* -------------------------------- avatar ---------------------------------- */
+  /** One profile row per user (keyed by lowercase email). fileId is the
+   * Blocks Data file object holding the profile picture; empty/null = none. */
+  getAvatarFileId(userId: string): Promise<string | null>;
+  setAvatarFileId(userId: string, fileId: string): Promise<void>;
 }

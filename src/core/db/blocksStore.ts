@@ -1,4 +1,5 @@
 import type { EntryRow, LanguageRow, JobRow } from "./rows.js";
+import { uid } from "./ids.js";
 import { getBlocksClient } from "../services/blocksClient.js";
 import type { BlocksClient } from "@seliseblocks/client";
 import type {
@@ -666,6 +667,33 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
         interval_days: Number(rec.intervalDays ?? 0),
         updated_at: (rec.LastUpdatedDate as string) ?? ""
       }));
+    },
+
+    /* -------------------------------- avatar ---------------------------------- */
+
+    async getAvatarFileId(userId) {
+      // A missing/unreadable UserProfile schema means "no avatar set" — never
+      // a page-load failure (the schema is provisioned via blocks/data/schemas).
+      try {
+        const recs = await listAll_("UserProfile", ["ItemId", "userId", "avatarFileId"], { userId });
+        return (recs[0]?.avatarFileId as string) || null;
+      } catch {
+        return null;
+      }
+    },
+
+    async setAvatarFileId(userId, fileId) {
+      let recs: Rec[] = [];
+      try {
+        recs = await listAll_("UserProfile", ["ItemId"], { userId });
+      } catch {
+        recs = [];
+      }
+      if (recs[0]) {
+        await updateRec_("UserProfile", recs[0].ItemId as string, { avatarFileId: fileId });
+      } else {
+        await insertRec_("UserProfile", { ItemId: uid(), userId, avatarFileId: fileId });
+      }
     }
   };
 }

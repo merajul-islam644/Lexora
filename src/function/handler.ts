@@ -66,6 +66,7 @@ export default async function handler(
   const deps: ApiDeps = {
     store: blocksStore(() => client),
     schedule: (promise) => ctx.waitUntil(promise),
+    files: client.data.files,
   };
 
   try {
@@ -133,6 +134,18 @@ export async function route(
 
   if (head === "me" && rest.length === 0 && req.method === "GET") {
     return workspaces.getMe(deps, req);
+  }
+
+  if (head === "me" && second === "avatar" && rest[1] === "upload-url") {
+    if (req.method === "POST") return workspaces.createAvatarUploadUrl(deps, req);
+    throw methodNotAllowed();
+  }
+
+  if (head === "me" && second === "avatar") {
+    if (req.method === "GET") return workspaces.getAvatar(deps, req);
+    if (req.method === "PATCH") return workspaces.setAvatar(deps, req);
+    if (req.method === "DELETE") return workspaces.deleteAvatar(deps, req);
+    throw methodNotAllowed();
   }
 
   if (head === "workspaces" && rest.length === 0) {

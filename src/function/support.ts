@@ -9,6 +9,8 @@ import type { WorkspaceRole } from "../shared/schemas.js";
    lowercase email -- the same dev-stage trust model the old relay used
    (WorkspaceMembership.user_id stores that email). */
 
+import type { BlocksClient } from "@seliseblocks/client";
+
 export interface ApiRequest {
   method: string;
   segments: string[];
@@ -27,10 +29,13 @@ export interface ApiResponse {
 }
 
 /** What route handlers get besides the request: the store plus a scheduler
- * for work that continues after the answer is sent (generation jobs). */
+ * for work that continues after the answer is sent (generation jobs). `files`
+ * is the Blocks Data files API on the function's own identity — the caller's
+ * token carries no Data permissions, so every storage call runs here. */
 export interface ApiDeps {
   store: DataStore;
   schedule: (promise: Promise<unknown>) => void;
+  files: BlocksClient["data"]["files"];
 }
 
 export const ok = (body?: unknown): ApiResponse => ({ statusCode: 200, body: body ?? {} });

@@ -72,7 +72,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 export function AppShell() {
-  const { user, workspaces, refresh } = useSession();
+  const { user, workspaces, refresh, avatarUrl } = useSession();
   const [active, select] = useActiveWorkspace(workspaces);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -199,7 +199,11 @@ export function AppShell() {
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((v) => !v)}
             >
-              {firstName.slice(0, 1).toUpperCase()}
+              {avatarUrl ? (
+                <img className="avatar-btn-img" src={avatarUrl} alt="" />
+              ) : (
+                firstName.slice(0, 1).toUpperCase()
+              )}
             </button>
             {menuOpen && (
               <div className="menu" role="menu">

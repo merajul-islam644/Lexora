@@ -26,8 +26,13 @@ export function makeTestEnv(): TestEnv {
   const db = openDatabase(path.join(dir, "test.db"));
   const store = sqliteStore(db);
   // Jobs keep running in the background exactly like ctx.waitUntil does;
-  // tests poll for the terminal state.
-  const deps: ApiDeps = { store, schedule: (p) => void p };
+  // tests poll for the terminal state. The files API is stubbed because no
+  // test drives the avatar routes.
+  const deps: ApiDeps = {
+    store,
+    schedule: (p) => void p,
+    files: {} as unknown as ApiDeps["files"]
+  };
   return { db, store, deps, dir };
 }
 

@@ -322,6 +322,21 @@ export function sqliteStore(db: Db): DataStore {
       return db
         .prepare("SELECT * FROM learning_progress WHERE workspace_id = ? AND user_id = ?")
         .all(workspaceId, userId) as unknown as ProgressRow[];
+    },
+
+    /* -------------------------------- avatar ---------------------------------- */
+
+    async getAvatarFileId(userId) {
+      const row = db
+        .prepare("SELECT avatar_file_id FROM user_profiles WHERE user_id = ?")
+        .get(userId) as unknown as { avatar_file_id: string | null } | undefined;
+      return row?.avatar_file_id || null;
+    },
+
+    async setAvatarFileId(userId, fileId) {
+      db.prepare(
+        "INSERT INTO user_profiles (user_id, avatar_file_id) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET avatar_file_id = excluded.avatar_file_id"
+      ).run(userId, fileId);
     }
   } satisfies DataStore;
 }

@@ -1,0 +1,32 @@
+{
+  "_meta": {
+    "cliVersion": "0.11.0",
+    "note": "Read-only snapshot written by 'blocks pull'. Editing it changes nothing; use the blocks <service> commands, then pull again.",
+    "pulledAt": "2026-10-28T10:57:17.850Z",
+    "readOnly": true,
+    "secretsRedacted": true,
+    "tenantId": "D1016ac7ede9f4f24a83c05ad4f3b2328",
+    "service": "iam"
+  },
+  "data": [
+    {
+      "name": "System User",
+      "slug": "clouduser",
+      "ancestorRoleSlugs": [],
+      "parentRoleSlug": null,
+      "canCreateOwn": true,
+      "description": "Default role assigned to cloud platform users. Grants the standard set of operational permissions needed to interact with tenant resources in the Blocks cloud environment.",
+      "count": 146,
+      "createdFromDefault": false,
+      "isArchived": false,
+      "itemId": "4d6f9ad6-e42d-4e0e-b095-3821e6ac4df5",
+      "createdDate": "2025-10-28T12:10:49.513Z",
+      "lastUpdatedDate": "2026-07-12T10:24:33.805Z",
+      "createdBy": "40fce74a-f557-4f58-84bc-41d7cd21f741",
+      "language": null,
+      "lastUpdatedBy": "40fce74a-f557-4f58-84bc-41d7cd21f741",
+      "organizationId": "default",
+      "tags": []
+    }
+  ]
+}

@@ -166,6 +166,11 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS idx_progress_user ON learning_progress(user_id);
 
+  CREATE TABLE IF NOT EXISTS user_profiles (
+    user_id TEXT PRIMARY KEY,
+    avatar_file_id TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS activity_log (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,

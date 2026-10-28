@@ -79,6 +79,15 @@ export const memberAddSchema = z.object({
 
 export const memberUpdateSchema = z.object({ role: z.enum(WORKSPACE_ROLES) });
 
+export const avatarSchema = z.object({
+  fileId: z.string().min(1).max(200)
+});
+
+export const avatarUploadSchema = z.object({
+  fileName: z.string().min(1).max(200),
+  contentType: z.enum(["image/png", "image/jpeg", "image/webp"])
+});
+
 /* ---------------------------- dictionary schemas --------------------------- */
 
 export const exampleSentenceSchema = z.object({
