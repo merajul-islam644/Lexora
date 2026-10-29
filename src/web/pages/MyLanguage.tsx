@@ -24,6 +24,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
   const [versions, setVersions] = useState<Array<{ version: number; change_summary: string; created_at: string }>>([]);
   const { workspaces } = useSession();
   const role = workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
+  // TODO(iam-roles): local workspace ladder, not IAM roles (src/core/types.ts)
   const canEdit = role === "owner" || role === "admin" || role === "editor";
 
   const load = useCallback(async () => {

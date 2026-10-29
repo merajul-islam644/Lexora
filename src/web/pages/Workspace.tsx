@@ -10,6 +10,8 @@ import { formatWhen } from "./Dashboard.js";
 
 type Workspace = { id: string; name: string; role: "owner" | "admin" | "editor" | "viewer" };
 
+// TODO(iam-roles): the ROLES list and every canManage/canRename/isOwner check
+// below run on the local workspace ladder, not IAM roles (src/core/types.ts)
 const ROLES = ["viewer", "editor", "admin"] as const;
 
 const ROLE_NOTES: Record<string, string> = {

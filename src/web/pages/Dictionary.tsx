@@ -131,6 +131,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
   const { workspaces } = useSession();
   const role =
     workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
+  // TODO(iam-roles): local workspace ladder, not IAM roles (src/core/types.ts)
   const canWrite = role === "owner" || role === "admin" || role === "editor";
 
   useEffect(() => {
