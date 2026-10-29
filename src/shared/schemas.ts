@@ -23,6 +23,8 @@ export const LEARNING_STATUSES = [
 ] as const;
 export type LearningStatus = (typeof LEARNING_STATUSES)[number];
 
+// TODO(iam-roles): local workspace roles, not IAM directory roles -- see the
+// ROLE_RANK note in src/core/types.ts
 export const WORKSPACE_ROLES = ["owner", "admin", "editor", "viewer"] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
@@ -66,6 +68,8 @@ export const ssoLoginSchema = z.object({
 
 export const workspaceCreateSchema = z.object({
   name: z.string().trim().min(2, "Workspace name is too short").max(80),
+  // Optional tag linking the workspace to a SELISE Blocks organization.
+  organizationId: z.string().trim().max(120).optional(),
 });
 
 export const workspaceUpdateSchema = z.object({

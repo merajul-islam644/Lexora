@@ -74,7 +74,7 @@ const MEMBERSHIP_FIELDS = ["workspaceId", "userId", "role"];
 const PHRASE_FIELDS = ["workspaceId", "sourceText", "sourceLang", "translatedText", "targetLang", "note"];
 const PROGRESS_FIELDS = ["workspaceId", "userId", "languageId", "dictionaryEntryId", "status", "lastReviewedAt", "nextReviewAt", "correctCount", "incorrectCount", "intervalDays"];
 const VERSION_FIELDS = ["workspaceId", "languageId", "version", "snapshotJson", "changeSummary", "authorUserId"];
-const WORKSPACE_FIELDS = ["name", "normalizedName", "ownerUserId", "isDemo"];
+const WORKSPACE_FIELDS = ["name", "normalizedName", "ownerUserId", "organizationId", "isDemo"];
 
 const SYSTEM = ["ItemId", "CreatedDate", "LastUpdatedDate"];
 
@@ -331,6 +331,7 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
       return {
         id: rec.ItemId as string,
         name: rec.name as string,
+        organization_id: (rec.organizationId as string) ?? "",
         is_demo: rec.isDemo ? 1 : 0,
         created_at: (rec.CreatedDate as string) ?? ""
       };
@@ -342,6 +343,7 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
         name: row.name,
         normalizedName: row.normalized_name,
         ownerUserId: row.owner_user_id,
+        organizationId: row.organization_id,
         isDemo: Boolean(row.is_demo)
       });
     },
@@ -384,7 +386,9 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
         out.push({
           id: workspaceId,
           name: ws.name as string,
+          organization_id: (ws.organizationId as string) ?? "",
           is_demo: ws.isDemo ? 1 : 0,
+          // TODO(iam-roles): local workspace role fallback, not an IAM role
           role: (m.role as string) ?? "viewer",
           created_at: (ws.CreatedDate as string) ?? "",
           language_name: (langRecs[0]?.name as string) ?? null,

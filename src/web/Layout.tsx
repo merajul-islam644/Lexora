@@ -11,6 +11,7 @@ import {
   Activity,
   BookOpen,
   BookMarked,
+  Building2,
   Check,
   ChevronDown,
   ChevronsLeft,
@@ -105,6 +106,7 @@ const NAV = [
   { to: "/app/translate", label: "Translation Lab", icon: Languages },
   { to: "/app/practice", label: "Practice & Revision", icon: RefreshCw },
   { to: "/app/security", label: "Security & Access", icon: Shield },
+  { to: "/app/console", label: "IAM Console", icon: Building2 },
   { to: "/app/activity", label: "Activity Log", icon: Activity },
   { to: "/app/settings", label: "Settings", icon: Settings },
 ];
@@ -117,7 +119,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 export function AppShell() {
-  const { user, workspaces, refresh, avatarUrl } = useSession();
+  const { user, workspaces, organizations, refresh, avatarUrl } = useSession();
   const [active, select] = useActiveWorkspace(workspaces);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Desktop sidebar rail: collapsed hides the labels (icons only), persisted
@@ -279,26 +281,30 @@ export function AppShell() {
               role="menu"
               aria-label="Workspaces"
             >
-              {workspaces.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  role="menuitem"
-                  className={w.id === active.id ? "on" : ""}
-                  onClick={() => {
-                    setWsOpen(false);
-                    select(w.id);
-                  }}
-                >
-                  <span className="ws-item">
-                    <span className="ws-item-name">{w.name}</span>
-                    <span className="ws-item-meta">
-                      {w.role} · {w.wordCount} words
+              {workspaces.map((w) => {
+                const orgName = organizations.find((o) => o.id === w.organizationId)?.name;
+                return (
+                  <button
+                    key={w.id}
+                    type="button"
+                    role="menuitem"
+                    className={w.id === active.id ? "on" : ""}
+                    onClick={() => {
+                      setWsOpen(false);
+                      select(w.id);
+                    }}
+                  >
+                    <span className="ws-item">
+                      <span className="ws-item-name">{w.name}</span>
+                      <span className="ws-item-meta">
+                        {orgName ? `${orgName} · ` : ""}
+                        {w.role} · {w.wordCount} words
+                      </span>
                     </span>
-                  </span>
-                  {w.id === active.id && <Check size={15} />}
-                </button>
-              ))}
+                    {w.id === active.id && <Check size={15} />}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

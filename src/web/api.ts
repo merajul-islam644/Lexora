@@ -165,7 +165,12 @@ async function identity(): Promise<{ email: string; name: string }> {
 
 /** Tenant guard, ported from the function's support.ts: a missing membership
  * answers 404 so workspaces cannot be probed; a role below the minimum (or
- * lacking the permission) answers 403. */
+ * lacking the permission) answers 403.
+ *
+ * TODO(iam-roles): minRole/permission checks run against the LOCAL workspace
+ * membership table (owner > admin > editor > viewer), not the Blocks IAM
+ * directory -- see the ROLE_RANK note in src/core/types.ts. Every
+ * requireWorkspace call site below inherits this. */
 async function requireWorkspace(
   workspaceId: string,
   minRole: WorkspaceRole,
@@ -196,7 +201,25 @@ async function getMe(): Promise<unknown> {
       createdAt: "",
     },
     workspaces: await workspaceSummary(),
+    organizations: (await myOrganizations()).organizations,
   };
+}
+
+/** GET me/organizations -- the caller's SELISE Blocks organizations (the IAM
+ * directory, read with the caller's own token). Best-effort: a directory
+ * hiccup answers an empty list, never a broken page. */
+async function myOrganizations(): Promise<{ organizations: Array<{ id: string; name: string }> }> {
+  try {
+    const res = await blocksClient.iam.organizations.my();
+    const list = ((res as Record<string, unknown>)?.organizations ?? []) as Array<Record<string, unknown>>;
+    return {
+      organizations: list
+        .map((o) => ({ id: String(o.itemId ?? ""), name: String(o.name ?? "Unnamed organization") }))
+        .filter((o) => o.id),
+    };
+  } catch {
+    return { organizations: [] };
+  }
 }
 
 /** Row -> DTO for the workspace cards, ported from workspaces.ts. */
@@ -206,6 +229,7 @@ async function workspaceSummary() {
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
+    organizationId: r.organization_id,
     role: r.role,
     isDemo: r.is_demo === 1,
     languageName: r.language_name,
@@ -227,9 +251,12 @@ async function createWorkspace(body: unknown): Promise<unknown> {
     name: input.name,
     normalized_name: input.name.trim().toLowerCase(),
     owner_user_id: email,
+    organization_id: input.organizationId ?? "",
     is_demo: 0,
     created_at: nowIso(),
   });
+  // TODO(iam-roles): the creator becomes the workspace's local "owner" --
+  // no IAM role is involved in this grant
   await store.insertMembership({
     id: uid(),
     workspace_id: id,
@@ -1246,6 +1273,11 @@ async function localRoute(
     throw methodNotAllowed();
   }
 
+  if (head === "me" && second === "organizations" && segs.length === 2) {
+    if (method === "GET") return myOrganizations();
+    throw methodNotAllowed();
+  }
+
   if (head === "me" && second === "avatar") {
     if (third === "upload-url") {
       if (method === "POST") return createAvatarUploadUrl(body);
@@ -1466,6 +1498,8 @@ export interface PublicUser {
 export interface WorkspaceSummary {
   id: string;
   name: string;
+  /** SELISE Blocks organization tag; "" when the workspace has none. */
+  organizationId: string;
   role: "owner" | "admin" | "editor" | "viewer";
   isDemo: boolean;
   languageName: string | null;

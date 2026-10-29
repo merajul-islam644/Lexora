@@ -7,6 +7,9 @@ interface SessionContextValue {
   loading: boolean;
   user: PublicUser | null;
   workspaces: WorkspaceSummary[];
+  /** The caller's SELISE Blocks organizations (IAM directory) — read once
+      with /api/me and shared by the workspace picker, create form, Profile. */
+  organizations: Array<{ id: string; name: string }>;
   /** The caller's profile photo download URL — shared by the topbar and the
       Profile page; download URLs are short-lived, so it rides each refresh. */
   avatarUrl: string | null;
@@ -21,16 +24,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<PublicUser | null>(null);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [organizations, setOrganizations] = useState<Array<{ id: string; name: string }>>([]);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const me = await api.get<{ user: PublicUser; workspaces: WorkspaceSummary[] }>("/api/me");
+      const me = await api.get<{
+        user: PublicUser;
+        workspaces: WorkspaceSummary[];
+        organizations?: Array<{ id: string; name: string }>;
+      }>("/api/me");
       setUser(me.user);
       setWorkspaces(me.workspaces);
+      // Array.isArray guard: a non-array here used to sit in context until the
+      // first .map/.find consumer unmounted the whole app (white screen).
+      setOrganizations(Array.isArray(me.organizations) ? me.organizations : []);
     } catch {
       setUser(null);
       setWorkspaces([]);
+      setOrganizations([]);
     } finally {
       setLoading(false);
     }
@@ -40,9 +52,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  // The avatar pointer lives in the Gateway; the function resolves the
-  // short-lived download URL with its own identity, so re-fetch per session
-  // load. A missing/unreadable photo just leaves the initials fallback.
+  // The avatar pointer lives in the Gateway; the short-lived download URL is
+  // resolved browser-side with the signed-in user's own token (files.get), so
+  // re-fetch per session load. A missing/unreadable photo just leaves the
+  // initials fallback.
   useEffect(() => {
     if (!user) {
       setAvatarUrl(null);
@@ -65,6 +78,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       loading,
       user,
       workspaces,
+      organizations,
       avatarUrl,
       setAvatarUrl,
       refresh,
@@ -73,7 +87,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setWorkspaces(ws);
       }
     }),
-    [loading, user, workspaces, avatarUrl, refresh]
+    [loading, user, workspaces, organizations, avatarUrl, refresh]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

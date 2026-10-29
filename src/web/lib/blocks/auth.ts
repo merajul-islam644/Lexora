@@ -182,3 +182,21 @@ export async function logout(): Promise<void> {
   await blocksClient.auth.logout({ refreshToken: getRefreshToken() }).catch(() => undefined);
   clearLocalTokens();
 }
+
+/** Switch the session's active organization (multi-org users). IAM answers
+ * with a fresh BlocksAuthResponse for the new org context -- apply any
+ * returned tokens over the cached ones (the cookie flow rotates its cookie
+ * server-side and returns no body tokens; nothing to apply there). Callers
+ * should re-seed app state after this resolves -- a hard reload is the
+ * simplest way to drop every cached view of the old org. */
+export async function switchActiveOrganization(organizationId: string): Promise<void> {
+  const response = (await blocksClient.auth.switchOrganization({
+    organizationId,
+    refreshToken: getRefreshToken() ?? "",
+  })) as Record<string, unknown> | undefined;
+
+  const accessToken = (response?.access_token ?? response?.accessToken) as string | undefined;
+  if (accessToken) {
+    persistTokens(accessToken, ((response?.refresh_token ?? response?.refreshToken) as string | undefined) ?? getRefreshToken());
+  }
+}

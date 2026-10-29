@@ -30,6 +30,7 @@ export async function createWorkspace(env: TestEnv, ownerEmail: string, name: st
     name,
     normalized_name: name.trim().toLowerCase(),
     owner_user_id: ownerEmail,
+    organization_id: "",
     is_demo: 0,
     created_at: nowIso()
   });

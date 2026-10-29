@@ -4,15 +4,16 @@ import { ArrowRight } from "lucide-react";
 import { api } from "../api.js";
 import { useSession } from "../state.js";
 import { toast } from "sonner";
-import { Button, ErrorNote, Field, Input, LoadingScreen, PageHeader } from "../ui.js";
+import { Button, ErrorNote, Field, Input, LoadingScreen, PageHeader, Select } from "../ui.js";
 
 /* ------------------------- first-run: create workspace ----------------------- */
 
 export function Welcome() {
   const [name, setName] = useState("");
+  const [orgId, setOrgId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const { refresh, user } = useSession();
+  const { refresh, user, organizations } = useSession();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export function Welcome() {
     setBusy(true);
     setError(null);
     try {
-      await api.post("/api/workspaces", { name });
+      await api.post("/api/workspaces", { name, organizationId: orgId || undefined });
       await refresh();
       toast.success("Workspace created. Welcome!");
       navigate("/app/dashboard");
@@ -46,6 +47,17 @@ export function Welcome() {
           <form onSubmit={submit} noValidate>
             <Field label="Workspace name" hint="Usually your company or team name.">
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Northstar Trading" minLength={2} maxLength={80} required autoFocus />
+            </Field>
+            <Field
+              label="Organization (optional)"
+              hint="A label from your SELISE Blocks directory — purely for grouping; it does not change who can enter."
+            >
+              <Select value={orgId} onChange={setOrgId} aria-label="Organization">
+                <option value="">No organization</option>
+                {organizations.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </Select>
             </Field>
             <ErrorNote message={error} />
             <Button type="submit" disabled={busy || name.trim().length < 2} style={{ width: "100%" }}>

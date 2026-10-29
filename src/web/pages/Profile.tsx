@@ -10,8 +10,8 @@ import { api } from "../api.js";
 const ROLE_TONE = { owner: "teal", admin: "violet", editor: "amber", viewer: "gray" } as const;
 
 /* Avatar bytes go to Blocks Storage (Azure) against a pre-signed URL minted
-   by the function with its own identity — the caller's token carries no Data
-   permissions. Only the file-id pointer is app data (Gateway). */
+   browser-side with the signed-in user's own token; only the file-id pointer
+   is app data (Gateway). */
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
@@ -22,7 +22,6 @@ function initialsOf(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-type OrgInfo = { itemId: string; name: string };
 type IamAccess = { roles: string[]; permissions: string[] };
 
 /* The signed-in user's own account. Identity comes from the app session
@@ -31,12 +30,10 @@ type IamAccess = { roles: string[]; permissions: string[] };
    the caller's own token. Everything shown here is real session data — no
    editable profile lives in Lexora, because the account belongs to IAM. */
 export function Profile() {
-  const { user, workspaces, avatarUrl, setAvatarUrl } = useSession();
+  const { user, workspaces, organizations, avatarUrl, setAvatarUrl } = useSession();
   const blocks = useBlocksAuth();
   const [iam, setIam] = useState<IamAccess | null>(null);
   const [iamFailed, setIamFailed] = useState(false);
-  const [orgs, setOrgs] = useState<OrgInfo[] | null>(null);
-  const [orgsFailed, setOrgsFailed] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -45,8 +42,8 @@ export function Profile() {
     document.title = "Profile · Lexora";
   }, []);
 
-  // Live IAM reads, scoped to the signed-in user: their roles, permissions
-  // and organization memberships. Read-only platform calls.
+  // Live IAM reads, scoped to the signed-in user: their roles and permissions.
+  // Read-only platform calls. Organizations ride the session (GET /api/me).
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -56,18 +53,6 @@ export function Profile() {
         if (alive) setIam({ roles: u.roles ?? [], permissions: u.permissions ?? [] });
       } catch {
         if (alive) setIamFailed(true);
-      }
-      try {
-        const res = await blocksClient.iam.organizations.my();
-        if (!alive) return;
-        const list = (res.organizations ?? []) as Array<Record<string, unknown>>;
-        setOrgs(
-          list
-            .map((o) => ({ itemId: String(o.itemId ?? ""), name: String(o.name ?? "Unnamed organization") }))
-            .filter((o) => o.itemId)
-        );
-      } catch {
-        if (alive) setOrgsFailed(true);
       }
     })();
     return () => {
@@ -254,20 +239,25 @@ export function Profile() {
             you can change, enforced by the Lexora function on every call.
           </p>
           <div className="profile-rows">
-            {workspaces.map((ws) => (
-              <div className="profile-row" key={ws.id} style={{ gap: 12 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    {ws.name} <Badge tone={ROLE_TONE[ws.role]}>{ws.role}</Badge>
+            {workspaces.map((ws) => {
+              const orgName = organizations.find((o) => o.id === ws.organizationId)?.name;
+              return (
+                <div className="profile-row" key={ws.id} style={{ gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      {ws.name}
+                      {orgName && <Badge tone="navy">{orgName}</Badge>}
+                      <Badge tone={ROLE_TONE[ws.role]}>{ws.role}</Badge>
+                    </div>
+                    <div style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 2 }}>
+                      {ws.languageName ? `${ws.languageName} · ` : "No language yet · "}
+                      {ws.wordCount} {ws.wordCount === 1 ? "word" : "words"}
+                    </div>
                   </div>
-                  <div style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 2 }}>
-                    {ws.languageName ? `${ws.languageName} · ` : "No language yet · "}
-                    {ws.wordCount} {ws.wordCount === 1 ? "word" : "words"}
-                  </div>
+                  <Link to="/app/dashboard" style={{ fontSize: 13, flexShrink: 0 }}>Open</Link>
                 </div>
-                <Link to="/app/dashboard" style={{ fontSize: 13, flexShrink: 0 }}>Open</Link>
-              </div>
-            ))}
+              );
+            })}
             {workspaces.length === 0 && (
               <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>
                 No workspaces yet; create one from the dashboard.
@@ -280,31 +270,19 @@ export function Profile() {
         <div className="card">
           <h3 className="card-section-title">Organizations</h3>
           <p className="card-section-sub">Your memberships in the SELISE Blocks directory.</p>
-          {orgs === null && !orgsFailed && (
-            <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>Loading…</p>
-          )}
-          {orgsFailed && (
+          {organizations.length === 0 && (
             <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>
-              Couldn't load your organizations right now.
+              Your account isn't listed in any organization.
             </p>
           )}
-          {orgs !== null && (
-            <div className="profile-rows">
-              {orgs.map((org) => (
-                <div className="profile-row" key={org.itemId}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{org.name}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "ui-monospace, monospace" }}>
-                    {org.itemId}
-                  </span>
-                </div>
-              ))}
-              {orgs.length === 0 && (
-                <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>
-                  Your account isn't listed in any organization.
-                </p>
-              )}
+          {organizations.map((org) => (
+            <div className="profile-row" key={org.id}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>{org.name}</span>
+              <span style={{ color: "var(--text-muted)", fontSize: 12, fontFamily: "ui-monospace, monospace" }}>
+                {org.id}
+              </span>
             </div>
-          )}
+          ))}
         </div>
 
         <HonestNote>

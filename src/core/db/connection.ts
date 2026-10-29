@@ -15,6 +15,7 @@ const MIGRATIONS: string[] = [
     name TEXT NOT NULL,
     normalized_name TEXT NOT NULL,
     owner_user_id TEXT NOT NULL,
+    organization_id TEXT NOT NULL DEFAULT '',
     is_demo INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -25,6 +26,8 @@ const MIGRATIONS: string[] = [
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
+    -- TODO(iam-roles): local workspace role, not from the Blocks IAM directory
+    -- (see the ROLE_RANK note in src/core/types.ts)
     role TEXT NOT NULL CHECK (role IN ('owner','admin','editor','viewer')),
     created_at TEXT NOT NULL,
     UNIQUE (workspace_id, user_id)

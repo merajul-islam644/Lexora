@@ -119,12 +119,12 @@ export function sqliteStore(db: Db): DataStore {
     /* ------------------------------ workspaces ------------------------------ */
 
     async getWorkspace(id) {
-      return db.prepare("SELECT id, name, is_demo, created_at FROM workspaces WHERE id = ?").get(id) as unknown as WorkspaceCoreRow | undefined;
+      return db.prepare("SELECT id, name, organization_id, is_demo, created_at FROM workspaces WHERE id = ?").get(id) as unknown as WorkspaceCoreRow | undefined;
     },
 
     async insertWorkspace(row) {
-      db.prepare("INSERT INTO workspaces (id, name, normalized_name, owner_user_id, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .run(row.id, row.name, row.normalized_name, row.owner_user_id, row.is_demo, row.created_at, row.created_at);
+      db.prepare("INSERT INTO workspaces (id, name, normalized_name, owner_user_id, organization_id, is_demo, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(row.id, row.name, row.normalized_name, row.owner_user_id, row.organization_id, row.is_demo, row.created_at, row.created_at);
     },
 
     async renameWorkspace(id, name, normalized_name, updatedAt) {
@@ -138,7 +138,7 @@ export function sqliteStore(db: Db): DataStore {
     async listWorkspaceSummaries(userId): Promise<WorkspaceSummaryRow[]> {
       return db
         .prepare(
-          `SELECT w.id, w.name, w.is_demo, m.role, w.created_at,
+          `SELECT w.id, w.name, w.organization_id, w.is_demo, m.role, w.created_at,
             (SELECT name FROM languages l WHERE l.workspace_id = w.id LIMIT 1) AS language_name,
             (SELECT COUNT(*) FROM dictionary_entries e WHERE e.workspace_id = w.id AND e.archived = 0) AS word_count
            FROM workspaces w

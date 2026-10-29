@@ -26,6 +26,7 @@ export interface EntryListResult {
 export interface WorkspaceCoreRow {
   id: string;
   name: string;
+  organization_id: string;
   is_demo: number;
   created_at: string;
 }
@@ -33,6 +34,7 @@ export interface WorkspaceCoreRow {
 export interface WorkspaceSummaryRow {
   id: string;
   name: string;
+  organization_id: string;
   is_demo: number;
   role: string;
   created_at: string;

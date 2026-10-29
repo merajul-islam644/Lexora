@@ -12,6 +12,7 @@ import type { WorkspaceSummary } from "./api.js";
 import { Features, Landing, SecurityPage } from "./pages/Public.js";
 import { Login } from "./pages/Auth.js";
 import { Profile } from "./pages/Profile.js";
+import { Console } from "./pages/Console.js";
 import { Dashboard, Welcome } from "./pages/Dashboard.js";
 import { MyLanguage } from "./pages/MyLanguage.js";
 import { DictionaryPage } from "./pages/Dictionary.js";
@@ -56,6 +57,9 @@ function AppRoutes() {
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="welcome" element={<Welcome />} />
         <Route path="profile" element={<Profile />} />
+        {/* Console is user-scoped, not workspace-scoped: it manages the IAM
+            directory itself (orgs, roles, invites), so no WithWorkspace. */}
+        <Route path="console" element={<Console />} />
         {wsRoute("dashboard", (ws) => <Dashboard key={ws.id} />)}
         {wsRoute("language", (ws) => <MyLanguage key={ws.id} workspace={ws} />)}
         {wsRoute("dictionary", (ws) => <DictionaryPage key={ws.id} workspace={ws} />)}
