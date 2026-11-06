@@ -319,7 +319,31 @@ export function Modal({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      // Focus trap: Tab cycles inside the dialog so keyboard users never
+      // land on the page behind it.
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = Array.from(
+        panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      const current = document.activeElement;
+      if (e.shiftKey && (current === first || current === panel)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && current === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -411,7 +435,9 @@ export function EmptyState({ icon, title, body, action }: { icon?: ReactNode; ti
   return (
     <div className="empty">
       <div className="empty-icon">{icon ?? <Inbox size={36} />}</div>
-      <h3>{title}</h3>
+      {/* h2: empty states sit right under the page h1, so the outline stays
+          h1 → h2 (an h3 here would skip a level). */}
+      <h2>{title}</h2>
       {body && <p>{body}</p>}
       {action}
     </div>

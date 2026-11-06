@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Moon, ShieldAlert, Sun, Trash2, UserPlus } from "lucide-react";
-import { api, type WorkspaceSummary } from "../api.js";
+import { Download, Moon, ShieldAlert, Sun, Trash2, UserPlus } from "lucide-react";
+import { api, downloadFile, type WorkspaceSummary } from "../api.js";
+import { describeApiError } from "../errors.js";
 import { useSession } from "../state.js";
 import { toast } from "sonner";
 import { saveTheme, type Theme } from "../theme.js";
-import { Badge, Button, ConfirmDialog, Field, HonestNote, Input, LoadingScreen, Modal, PageHeader, Select, Stat } from "../ui.js";
+import { Badge, Button, ConfirmDialog, EmptyState, Field, HonestNote, Input, LoadingScreen, Modal, PageHeader, Select, Stat } from "../ui.js";
 import { formatWhen } from "./Dashboard.js";
 
 type Workspace = { id: string; name: string; role: "owner" | "admin" | "editor" | "viewer" };
@@ -112,7 +113,7 @@ export function SecurityAccess({ workspace }: { workspace: Workspace }) {
         <h3>How your workspace is protected</h3>
         <ul style={{ margin: 0, paddingLeft: 20, color: "var(--text-muted)", fontSize: 14, lineHeight: 1.8 }}>
           <li>Workspace data lives in the SELISE Blocks Data Gateway; every call uses your own signed-in identity.</li>
-          <li>Membership is checked on every workspace action, so data stays inside the team.</li>
+          <li>Membership is re-checked on every workspace action in the app's data layer, so data stays inside the team.</li>
           <li>Sign-in runs through your organisation's SELISE Blocks SSO; Lexora never stores passwords.</li>
           <li>Exports, imports and generations are recorded in the Activity Log.</li>
           <li>Avatar files are stored privately; the browser only ever receives short-lived access links.</li>
@@ -141,7 +142,7 @@ function AddMemberButton({ workspaceId, onAdded }: { workspaceId: string; onAdde
       setEmail("");
       await onAdded();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add the member");
+      setError(describeApiError(err, "Could not add the member"));
     } finally {
       setBusy(false);
     }
@@ -187,7 +188,7 @@ function RoleSelect({ workspaceId, userId, current, onDone }: { workspaceId: str
           toast.success("Role updated.");
           await onDone();
         } catch (err) {
-          toast.error(err instanceof Error ? err.message : "Could not update the role");
+          toast.error(describeApiError(err, "Could not update the role"));
         }
       }}
       style={{ width: 110 }}
@@ -212,7 +213,7 @@ function RemoveMemberButton({ workspaceId, userId, email, onDone }: { workspaceI
       setConfirm(false);
       await onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not remove the member");
+      toast.error(describeApiError(err, "Could not remove the member"));
     } finally {
       setBusy(false);
     }
@@ -254,6 +255,18 @@ export function ActivityLog({ workspace }: { workspace: Workspace }) {
 
   if (!data) return <LoadingScreen />;
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
+
+  if (data.items.length === 0) {
+    return (
+      <div>
+        <PageHeader title="Activity Log" subtitle="An honest record of everything that happened in this workspace." />
+        <EmptyState
+          title="Nothing has happened yet"
+          body="Generations, imports, exports, renames, membership changes and deletions will all be recorded here as they happen."
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -307,7 +320,47 @@ export function Settings({ workspace }: { workspace: Workspace }) {
       <PageHeader title="Settings" subtitle={`Workspace "${workspace.name}" · you are the ${role}.`} />
       <WorkspaceSettings workspace={workspace} role={role} wordCount={summary?.wordCount} onChanged={refresh} />
       <AppearanceSettings />
+      <BackupSettings workspace={workspace} role={role} />
       <DangerZone workspace={workspace} role={role} onChanged={refresh} />
+    </div>
+  );
+}
+
+/* Full-workspace export (design.md §14): today's only backup mechanism --
+   the gateway keeps no point-in-time copies, so this card says so plainly. */
+function BackupSettings({ workspace, role }: { workspace: Workspace; role: string }) {
+  const canExport = role === "owner" || role === "admin";
+  const [busy, setBusy] = useState(false);
+
+  const download = async () => {
+    setBusy(true);
+    try {
+      await downloadFile(`/api/ws/${workspace.id}/export/all`);
+      toast.success("Backup downloaded. Keep it somewhere safe.");
+    } catch (err) {
+      toast.error(describeApiError(err, "Export failed"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3>Backup &amp; export</h3>
+      <p className="bilingual">
+        One JSON file with everything: the language and every version, the whole dictionary,
+        phrasebook, generation jobs and the activity log. Lexora has no automatic server-side
+        backup — this download is the only backup there is — so save one regularly.
+      </p>
+      {canExport ? (
+        <Button variant="outline" disabled={busy} onClick={() => void download()}>
+          <Download size={15} /> Download full backup (JSON)
+        </Button>
+      ) : (
+        <p className="bilingual" style={{ margin: 0 }}>
+          Only an admin or the owner can download the backup.
+        </p>
+      )}
     </div>
   );
 }
@@ -327,7 +380,7 @@ function WorkspaceSettings({ workspace, role, wordCount, onChanged }: { workspac
       toast.success("Workspace renamed.");
       await onChanged();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Rename failed");
+      toast.error(describeApiError(err, "Rename failed"));
     } finally {
       setBusy(false);
     }
@@ -400,7 +453,7 @@ function DangerZone({ workspace, role, onChanged }: { workspace: Workspace; role
       await onChanged();
       navigate("/app/welcome");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Delete failed");
+      toast.error(describeApiError(err, "Delete failed"));
       setBusy(false);
     }
   };

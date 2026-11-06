@@ -578,3 +578,28 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .console-toolbar, .console-access, .console-invite { grid-template-columns: 1fr; }
   .console-user-body { padding-left: 16px; }
 }
+
+/* ------------------------------- accessibility ------------------------------ */
+
+/* Skip-to-content: invisible until keyboard-focused, then a visible pill at
+   the top-left that jumps past the header/nav to #main-content. */
+.skip-link {
+  position: absolute;
+  top: -48px;
+  left: 16px;
+  z-index: 200;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus { top: 12px; }
+
+/* Grammar Workspace: sections are h2 and POS groups h3 for a clean
+   h1 → h2 → h3 outline; the scoped sizes keep the visuals as designed. */
+.grammar-page .card h2 { font-size: 16px; }
+.grammar-page .card h3 { font-size: 14px; }

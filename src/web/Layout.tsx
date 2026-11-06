@@ -22,6 +22,7 @@ import {
   Menu,
   Moon,
   RefreshCw,
+  ScrollText,
   Settings,
   Shield,
   Sparkles,
@@ -66,6 +67,9 @@ export function BrandMark({ light }: { light?: boolean }) {
 export function PublicLayout({ children }: { children?: React.ReactNode }) {
   return (
     <div>
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       <header className="public-header">
         <Link to="/" style={{ textDecoration: "none" }}>
           <BrandMark />
@@ -87,7 +91,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
           </Link>
         </nav>
       </header>
-      {children ?? <Outlet />}
+      <main id="main-content">{children ?? <Outlet />}</main>
       <footer className="public-footer">
         Lexora: your business's own private language. A constructed language is
         a communication tool, not encryption.
@@ -101,6 +105,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 const NAV = [
   { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/app/language", label: "My Language", icon: Sparkles },
+  { to: "/app/grammar", label: "Grammar", icon: ScrollText },
   { to: "/app/dictionary", label: "Dictionary", icon: BookOpen },
   { to: "/app/word-builder", label: "Word Builder", icon: BookMarked },
   { to: "/app/translate", label: "Translation Lab", icon: Languages },
@@ -183,7 +188,7 @@ export function AppShell() {
     if (location.pathname.startsWith("/app/welcome")) {
       return (
         <div className="main" style={{ minHeight: "100vh" }}>
-          <main className="content">
+          <main id="main-content" className="content">
             <Outlet />
           </main>
         </div>
@@ -223,6 +228,9 @@ export function AppShell() {
 
   return (
     <div className="shell">
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       {drawerOpen && (
         <div className="scrim" onClick={() => setDrawerOpen(false)} />
       )}
@@ -389,7 +397,7 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <main className="content">
+        <main id="main-content" className="content">
           <Outlet context={{ workspace: active }} />
         </main>
       </div>

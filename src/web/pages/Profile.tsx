@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Badge, ErrorNote, HonestNote, PageHeader, Spinner } from "../ui.js";
+import { Badge, EmptyState, ErrorNote, HonestNote, PageHeader, Spinner } from "../ui.js";
 import { useSession } from "../state.js";
 import { toast } from "sonner";
 import { useBlocksAuth } from "../blocks-auth.js";
 import { blocksClient } from "../lib/blocks/client.js";
 import { api } from "../api.js";
+import { describeApiError } from "../errors.js";
 
 const ROLE_TONE = { owner: "teal", admin: "violet", editor: "amber", viewer: "gray" } as const;
 
@@ -92,7 +93,7 @@ export function Profile() {
         setAvatarUrl(fresh.downloadUrl);
         toast.success("Profile photo updated.");
       } catch (e) {
-        setAvatarError(e instanceof Error ? e.message : "Could not upload the photo.");
+        setAvatarError(describeApiError(e, "Could not upload the photo."));
       } finally {
         setUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -109,7 +110,7 @@ export function Profile() {
         setAvatarUrl(null);
         toast("Profile photo removed.");
       } catch (e) {
-        setAvatarError(e instanceof Error ? e.message : "Could not remove the photo.");
+        setAvatarError(describeApiError(e, "Could not remove the photo."));
       } finally {
         setUploading(false);
       }
@@ -236,7 +237,7 @@ export function Profile() {
           <h3 className="card-section-title">Your workspaces</h3>
           <p className="card-section-sub">
             {workspaces.length === 1 ? "1 workspace" : `${workspaces.length} workspaces`}; your role here decides what
-            you can change, enforced by the Lexora function on every call.
+            you can change, re-checked on every call in the app's data layer.
           </p>
           <div className="profile-rows">
             {workspaces.map((ws) => {
@@ -259,9 +260,7 @@ export function Profile() {
               );
             })}
             {workspaces.length === 0 && (
-              <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>
-                No workspaces yet; create one from the dashboard.
-              </p>
+              <EmptyState title="No workspaces yet" body="Create your first workspace from the dashboard to start building a language." />
             )}
           </div>
         </div>
@@ -271,9 +270,7 @@ export function Profile() {
           <h3 className="card-section-title">Organizations</h3>
           <p className="card-section-sub">Your memberships in the SELISE Blocks directory.</p>
           {organizations.length === 0 && (
-            <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>
-              Your account isn't listed in any organization.
-            </p>
+            <EmptyState title="No organizations" body="Your account isn't listed in any SELISE Blocks organization yet." />
           )}
           {organizations.map((org) => (
             <div className="profile-row" key={org.id}>

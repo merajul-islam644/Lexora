@@ -123,24 +123,28 @@ export function SecurityPage() {
         <div className="grid-2">
           <div className="feature-card">
             <div className="icon-box"><Lock size={20} /></div>
-            <h3>Server-side tenant isolation</h3>
+            <h3>Workspace isolation, enforced on every call</h3>
             <p>
-              Every read, write, search, export and generation is authorized against your session on the server,
-              never in the browser. A workspace you don't belong to answers "not found", so it can't even be probed for existence.
+              Every read, write, search, export and generation is checked against your
+              membership before it runs: a workspace you don't belong to answers "not found",
+              so it can't even be probed for existence. Lexora runs without a server of its
+              own — the checks execute in the app's data layer with your own signed-in
+              token, and we document the limits of that model plainly instead of overstating them.
             </p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><KeyRound size={20} /></div>
-            <h3>Sessions done properly</h3>
+            <h3>Sign-in you already trust</h3>
             <p>
-              Passwords are hashed with scrypt. Sessions are server-side records behind HttpOnly, SameSite cookies.
-              Cross-site state changes are blocked; you can review and revoke every active session.
+              There is no Lexora password. You sign in through your organisation's SELISE
+              Blocks SSO, and every data call carries your own signed-in identity — Lexora
+              never sees or stores a password, and it keeps no session cookies of its own.
             </p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><Eye size={20} /></div>
             <h3>Full audit trail</h3>
-            <p>Imports, exports, generations, renames and membership changes are recorded in your workspace's activity log, visible to you.</p>
+            <p>Imports, exports, generations and cancellations, renames, membership changes and deletions are recorded in your workspace's activity log — and the log outlives the workspace itself.</p>
           </div>
           <div className="feature-card" style={{ borderColor: "#F4D5B5" }}>
             <div className="icon-box" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { api } from "../api.js";
+import { describeApiError } from "../errors.js";
 import { useSession } from "../state.js";
 import { toast } from "sonner";
 import { Button, ErrorNote, Field, Input, LoadingScreen, PageHeader, Select } from "../ui.js";
@@ -30,7 +31,7 @@ export function Welcome() {
       toast.success("Workspace created. Welcome!");
       navigate("/app/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the workspace");
+      setError(describeApiError(err, "Could not create the workspace"));
     } finally {
       setBusy(false);
     }
@@ -118,7 +119,7 @@ export function Dashboard() {
         const dash = await api.get<DashboardData>(`/api/ws/${id}/dashboard`);
         if (alive) setData(dash);
       } catch (err) {
-        if (alive) setError(err instanceof Error ? err.message : "Could not load dashboard");
+        if (alive) setError(describeApiError(err, "Could not load dashboard"));
       }
     })();
     return () => {
@@ -145,7 +146,7 @@ export function Dashboard() {
           <span className="badge">Private to your workspace</span>
           <div style={{ fontSize: 13, marginTop: 10, color: "#C9D5E2" }}>Your language is ready</div>
           <div className="native">
-            {data.language.name} <span className="bn" style={{ fontSize: 22, color: "#D8F5EF" }}>{data.language.nativeName}</span>
+            {data.language.name} <span className="bn" lang="bn" style={{ fontSize: 22, color: "#D8F5EF" }}>{data.language.nativeName}</span>
           </div>
           <p className="desc">{data.language.description}</p>
           <div className="actions">
@@ -211,7 +212,7 @@ export function Dashboard() {
                   {data.preview.map((p) => (
                     <tr key={p.id}>
                       <td className="mono"><strong>{p.word}</strong></td>
-                      <td className="bn">{p.bengaliMeaning || ""}</td>
+                      <td className="bn" lang="bn">{p.bengaliMeaning || ""}</td>
                       <td>{p.englishMeaning || ""}</td>
                       <td className="bilingual">{p.pronunciationGuide || ""}</td>
                     </tr>
