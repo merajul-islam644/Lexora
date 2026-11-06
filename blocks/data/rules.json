@@ -1,0 +1,72 @@
+{
+  "policies": [
+    {
+      "schemaName": "UserProfile",
+      "policyName": "Owner access",
+      "policyDescription": "Generated from Rule Builder",
+      "policyType": 0,
+      "operation": 0,
+      "fieldNames": [],
+      "ruleGroup": {
+        "logicalOperator": 0,
+        "rules": [
+          {
+            "leftSource": 1,
+            "leftOperand": "CreatedBy",
+            "operator": 0,
+            "rightSource": 0,
+            "rightOperand": "userId",
+            "rightOperands": [],
+            "staticValue": null,
+            "description": null
+          }
+        ],
+        "nestedGroups": []
+      },
+      "priority": 1,
+      "isAllowPolicy": true
+    },
+    {
+      "schemaName": "LearningProgress",
+      "policyName": "Owner access",
+      "policyDescription": "Self-only read: the caller sees their own practice rows (mirrors the UserProfile policy).",
+      "policyType": 0,
+      "operation": 0,
+      "fieldNames": [],
+      "ruleGroup": {
+        "logicalOperator": 0,
+        "rules": [
+          {
+            "leftSource": 1,
+            "leftOperand": "CreatedBy",
+            "operator": 0,
+            "rightSource": 0,
+            "rightOperand": "userId",
+            "rightOperands": [],
+            "staticValue": null,
+            "description": null
+          }
+        ],
+        "nestedGroups": []
+      },
+      "priority": 1,
+      "isAllowPolicy": true
+    }
+  ],
+  "security": [
+    {
+      "schemaName": "UserProfile",
+      "operation": 0,
+      "policyType": 0,
+      "accessLevel": 3,
+      "fieldNames": []
+    },
+    {
+      "schemaName": "LearningProgress",
+      "operation": 0,
+      "policyType": 0,
+      "accessLevel": 3,
+      "fieldNames": []
+    }
+  ]
+}

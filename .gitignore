@@ -5,4 +5,6 @@ npm-cache/
 .cert/
 dist-web/
 data/
+# ...but the pulled Gateway config is the rollback source of truth — keep it tracked
+!blocks/data/
 .playwright-mcp/
