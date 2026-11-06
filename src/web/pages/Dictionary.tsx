@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Archive,
   ArchiveRestore,
@@ -18,6 +19,7 @@ import {
   type EntryDTO,
   type ImportReport,
 } from "../api.js";
+import { describeApiError } from "../errors.js";
 import { useSession } from "../state.js";
 import { toast } from "sonner";
 import {
@@ -123,6 +125,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
   const [q, setQ] = useState("");
   const [pos, setPos] = useState("");
   const [source, setSource] = useState("");
+  const [status, setStatus] = useState("");
   const [sort, setSort] = useState("alpha");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -133,6 +136,26 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
     workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
   // TODO(iam-roles): local workspace ladder, not IAM roles (src/core/types.ts)
   const canWrite = role === "owner" || role === "admin" || role === "editor";
+
+  // Deep links from the generation flow: /app/dictionary?status=draft lands on
+  // the "Review drafts" queue, ?import=1 opens the import dialog directly.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const statusParam = searchParams.get("status");
+    if (statusParam === "draft" || statusParam === "approved") {
+      setStatus(statusParam);
+      setSource("");
+      setPage(1);
+    }
+    if (searchParams.get("import") === "1" && canWrite) {
+      setIoOpen("import");
+    }
+    if (statusParam || searchParams.get("import")) {
+      setSearchParams({}, { replace: true });
+    }
+    // Run once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     document.title = "Dictionary · Lexora";
@@ -149,6 +172,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
       if (q.trim()) params.set("q", q.trim());
       if (pos) params.set("pos", pos);
       if (source) params.set("source", source);
+      if (status) params.set("status", status);
       const res = await api.get<ListResponse>(
         `/api/ws/${workspace.id}/dictionary?${params.toString()}`,
       );
@@ -156,7 +180,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
     } finally {
       setLoading(false);
     }
-  }, [workspace.id, page, q, pos, source, sort]);
+  }, [workspace.id, page, q, pos, source, status, sort]);
 
   useEffect(() => {
     const t = window.setTimeout(() => void load(), q ? 300 : 0);
@@ -246,6 +270,18 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
           <option value="imported">Imported</option>
         </Select>
         <Select
+          value={status}
+          onChange={(v) => {
+            setStatus(v);
+            setPage(1);
+          }}
+          aria-label="Filter by review status"
+        >
+          <option value="">Drafts + approved</option>
+          <option value="draft">Drafts to review</option>
+          <option value="approved">Approved</option>
+        </Select>
+        <Select
           value={sort}
           onChange={(v) => setSort(v)}
           aria-label="Sort order"
@@ -260,17 +296,17 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
       {!data || data.items.length === 0 ? (
         <EmptyState
           title={
-            q || pos || source ? "No words match" : "Your dictionary is empty"
+            q || pos || source || status ? "No words match" : "Your dictionary is empty"
           }
           body={
-            q || pos || source
+            q || pos || source || status
               ? "Try a different search or filter."
               : canWrite
                 ? "Add your first word. It only needs the word itself, but a বাংলা or English reference makes generation much better."
                 : "An editor hasn't added words yet."
           }
           action={
-            canWrite && !q && !pos && !source ? (
+            canWrite && !q && !pos && !source && !status ? (
               <Button onClick={() => setEditing("new")}>
                 Add your first word
               </Button>
@@ -287,7 +323,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
                   <th>Bengali reference</th>
                   <th>English reference</th>
                   <th>Parts of speech</th>
-                  <th>Pronounciation</th>
+                  <th>Pronunciation</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -303,7 +339,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
                         <SourceBadge source={e.source} />
                       </div>
                     </td>
-                    <td className="bn">{e.bengaliMeaning || ""}</td>
+                    <td className="bn" lang="bn">{e.bengaliMeaning || ""}</td>
                     <td>{e.englishMeaning || ""}</td>
                     <td>
                       <Badge tone="navy">{e.partOfSpeech}</Badge>
@@ -440,7 +476,7 @@ function EditDialog({
       }
       await onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the word");
+      setError(describeApiError(err, "Could not save the word"));
     } finally {
       setBusy(false);
     }
@@ -591,7 +627,7 @@ function ArchiveButton({
       }
       await onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Action failed");
+      toast.error(describeApiError(err, "Action failed"));
     } finally {
       setBusy(false);
     }
@@ -723,7 +759,7 @@ function ImportDialog({
       setReport(res.report);
       setRows(res.report.rows);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not read the file");
+      setError(describeApiError(err, "Could not read the file"));
     } finally {
       setBusy(false);
     }
@@ -742,7 +778,7 @@ function ImportDialog({
       await onImported();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Import failed");
+      setError(describeApiError(err, "Import failed"));
     } finally {
       setBusy(false);
     }

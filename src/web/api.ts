@@ -22,6 +22,7 @@ import {
   conflict,
   forbidden,
   notFound,
+  tooMany,
   unauthorized,
 } from "../core/lib/errors.js";
 import { parseBody, pageParams } from "../core/lib/validate.js";
@@ -48,6 +49,9 @@ import {
   getJob,
   cancelGenerationJob,
 } from "../core/services/generationRunner.js";
+import { addStarterDictionary } from "../core/services/starterDictionary.js";
+import { diffProfiles } from "../core/services/languageDiff.js";
+import { buildWorkspaceExport } from "../core/services/workspaceExport.js";
 import {
   getPracticeQueue,
   applyReview,
@@ -66,12 +70,17 @@ import {
   languageRenameSchema,
   suggestWordSchema,
   approveWordSchema,
+  grammarRuleCreateSchema,
+  grammarRuleUpdateSchema,
   translateSchema,
   phrasebookAddSchema,
+  phrasebookUpdateSchema,
+  translationFlagSchema,
   practiceReviewSchema,
   avatarSchema,
   avatarUploadSchema,
-  PRACTICE_MODES as SCHEMA_PRACTICE_MODES,
+  languageProfileSchema,
+  PRACTICE_MODES,
   type WorkspaceRole,
 } from "../shared/schemas.js";
 
@@ -121,71 +130,79 @@ function apiErrorFrom(status: number, body: unknown): ApiError {
   );
 }
 
-/* ------------------------- the Gateway-side runtime ------------------------ */
+/* ------------------------------ router factory ----------------------------- */
 
-/** The same DataStore implementation the function used, bound to the
- * browser's own SDK client: every row read/write is a Gateway call made as
- * the signed-in user. */
-const store: DataStore = blocksStore(() => blocksClient);
-/** Avatar file storage: presign, short-lived download URLs and trash -- the
- * same calls the function made, now with the browser's own token (the one
- * that always carried the storage permissions). */
-const files = blocksClient.data.files;
-
-/** Fire-and-forget scheduler. The function had ctx.waitUntil; a browser tab
- * keeps its own promises alive, so a plain catch-all is the equivalent.
- * Closing the tab mid-generation stalls that job (it stays "running"). */
-function schedule(promise: Promise<unknown>): void {
-  promise.catch(() => undefined);
+/** Test seam: the router's whole environment, injectable so unit tests can
+ * drive the exact route handlers against a throwaway DataStore with a fixed
+ * identity -- no network, no Blocks client. */
+export interface ApiRouterDeps {
+  /** Every row read/write: the Blocks Gateway store in the browser, SQLite in
+   * tests. */
+  store: DataStore;
+  /** Avatar file storage: presign, short-lived download URLs and trash. */
+  files: typeof blocksClient.data.files;
+  /** Identity: the email IAM attests for the caller's own token. Memberships,
+   * ownership and activity actors key on it. */
+  identity: () => Promise<{ email: string; name: string }>;
+  /** Fire-and-forget scheduler. The function had ctx.waitUntil; a browser tab
+   * keeps its own promises alive, so a plain catch-all is the equivalent.
+   * Closing the tab mid-generation stalls that job (it stays "running"). */
+  schedule?: (promise: Promise<unknown>) => void;
+  /** The caller's SELISE Blocks organizations. Defaults to the real IAM
+   * lookup. */
+  organizations?: () => Promise<{
+    organizations: Array<{ id: string; name: string }>;
+  }>;
 }
 
-let emailCache: string | null = null;
-let nameCache = "";
-
-/** Identity: the email IAM attests for the caller's own token -- the same
- * resolution the function performed. Memberships, ownership and activity
- * actors key on it. */
-async function identity(): Promise<{ email: string; name: string }> {
-  if (emailCache) return { email: emailCache, name: nameCache };
-  const claims = (await blocksClient.auth.userInfo()) as
-    | Record<string, unknown>
-    | undefined;
-  const email = String(
-    (claims?.email as string) ?? (claims?.preferred_username as string) ?? "",
-  )
-    .trim()
-    .toLowerCase();
-  if (!email) throw unauthorized("Please sign in to continue");
-  nameCache = String(
-    (claims?.name as string) ?? (claims?.given_name as string) ?? "",
-  ).trim();
-  emailCache = email;
-  return { email, name: nameCache };
+export interface ApiRouter {
+  api: {
+    get<T>(path: string): Promise<T>;
+    post<T>(path: string, body?: unknown): Promise<T>;
+    patch<T>(path: string, body?: unknown): Promise<T>;
+    del<T>(path: string): Promise<T>;
+  };
+  request<T>(method: string, path: string, body?: unknown): Promise<T>;
 }
 
-/** Tenant guard, ported from the function's support.ts: a missing membership
- * answers 404 so workspaces cannot be probed; a role below the minimum (or
- * lacking the permission) answers 403.
- *
- * TODO(iam-roles): minRole/permission checks run against the LOCAL workspace
- * membership table (owner > admin > editor > viewer), not the Blocks IAM
- * directory -- see the ROLE_RANK note in src/core/types.ts. Every
- * requireWorkspace call site below inherits this. */
-async function requireWorkspace(
-  workspaceId: string,
-  minRole: WorkspaceRole,
-  permission?: Permission,
-): Promise<WorkspaceRole> {
-  const { email } = await identity();
-  const row = await store
-    .getMembership(workspaceId, email)
-    .catch(() => undefined);
-  if (!row) throw notFound("Workspace not found");
-  const role = row.role as WorkspaceRole;
-  if (!hasAtLeast(role, minRole)) throw forbidden();
-  if (permission && !can(role, permission)) throw forbidden();
-  return role;
-}
+/** Builds the route dispatcher over a given environment. All handlers below
+ * close over `deps` through the const bindings; behavior is identical to the
+ * pre-factory module-level wiring. */
+export function createApiRouter(deps: ApiRouterDeps): ApiRouter {
+  const store: DataStore = deps.store;
+  const files = deps.files;
+  const identity = deps.identity;
+  const myOrganizations =
+    deps.organizations ?? browserMyOrganizations;
+  const schedule =
+    deps.schedule ??
+    ((promise: Promise<unknown>) => {
+      promise.catch(() => undefined);
+    });
+
+  /** Tenant guard, ported from the function's support.ts: a missing membership
+   * answers 404 so workspaces cannot be probed; a role below the minimum (or
+   * lacking the permission) answers 403.
+   *
+   * TODO(iam-roles): minRole/permission checks run against the LOCAL workspace
+   * membership table (owner > admin > editor > viewer), not the Blocks IAM
+   * directory -- see the ROLE_RANK note in src/core/types.ts. Every
+   * requireWorkspace call site below inherits this. */
+  async function requireWorkspace(
+    workspaceId: string,
+    minRole: WorkspaceRole,
+    permission?: Permission,
+  ): Promise<WorkspaceRole> {
+    const { email } = await identity();
+    const row = await store
+      .getMembership(workspaceId, email)
+      .catch(() => undefined);
+    if (!row) throw notFound("Workspace not found");
+    const role = row.role as WorkspaceRole;
+    if (!hasAtLeast(role, minRole)) throw forbidden();
+    if (permission && !can(role, permission)) throw forbidden();
+    return role;
+  }
 
 /* ----------------------------- route handlers ------------------------------ */
 /* Ports of src/function/routes/* -- same inputs, same response bodies. */
@@ -203,23 +220,6 @@ async function getMe(): Promise<unknown> {
     workspaces: await workspaceSummary(),
     organizations: (await myOrganizations()).organizations,
   };
-}
-
-/** GET me/organizations -- the caller's SELISE Blocks organizations (the IAM
- * directory, read with the caller's own token). Best-effort: a directory
- * hiccup answers an empty list, never a broken page. */
-async function myOrganizations(): Promise<{ organizations: Array<{ id: string; name: string }> }> {
-  try {
-    const res = await blocksClient.iam.organizations.my();
-    const list = ((res as Record<string, unknown>)?.organizations ?? []) as Array<Record<string, unknown>>;
-    return {
-      organizations: list
-        .map((o) => ({ id: String(o.itemId ?? ""), name: String(o.name ?? "Unnamed organization") }))
-        .filter((o) => o.id),
-    };
-  } catch {
-    return { organizations: [] };
-  }
 }
 
 /** Row -> DTO for the workspace cards, ported from workspaces.ts. */
@@ -311,7 +311,20 @@ async function renameWorkspace(workspaceId: string, body: unknown): Promise<unkn
 }
 
 async function deleteWorkspace(workspaceId: string): Promise<unknown> {
-  await requireWorkspace(workspaceId, "owner");
+  const role = await requireWorkspace(workspaceId, "owner");
+  const workspace = await store.getWorkspace(workspaceId);
+  if (!workspace) throw notFound("Workspace not found");
+  // The audit entry is written BEFORE the delete and the store detaches the
+  // log rows instead of cascading them away, so the tombstone survives the
+  // workspace it describes (spec §15).
+  await logActivity(store, {
+    workspaceId,
+    actorUserId: (await identity()).email,
+    action: "workspace.deleted",
+    resourceType: "workspace",
+    resourceId: workspaceId,
+    metadata: { name: workspace.name, role },
+  });
   await store.deleteWorkspace(workspaceId);
   return { message: "Workspace and all its data were deleted." };
 }
@@ -480,6 +493,14 @@ async function updateMember(
   if (target.role === "owner" || input.role === "owner")
     throw badRequest("Ownership is not transferable in this version.");
   await store.updateMembershipRole(workspaceId, targetUserId, input.role);
+  await logActivity(store, {
+    workspaceId,
+    actorUserId: (await identity()).email,
+    action: "member.role_changed",
+    resourceType: "membership",
+    resourceId: targetUserId,
+    metadata: { from: target.role, to: input.role },
+  });
   return { message: "Role updated." };
 }
 
@@ -493,6 +514,14 @@ async function removeMember(
   if (target.role === "owner")
     throw badRequest("The workspace owner cannot be removed.");
   await store.deleteMembership(workspaceId, targetUserId);
+  await logActivity(store, {
+    workspaceId,
+    actorUserId: (await identity()).email,
+    action: "member.removed",
+    resourceType: "membership",
+    resourceId: targetUserId,
+    metadata: { role: target.role },
+  });
   return { message: "Member removed." };
 }
 
@@ -525,6 +554,7 @@ async function listEntries(
     pos: query.pos ?? "",
     learning: query.learning ?? "",
     source: query.source ?? "",
+    status: query.status ?? "",
     sort: (["alpha", "newest", "updated", "needs_revision"] as const).includes(
       sort as "alpha",
     )
@@ -564,6 +594,24 @@ async function exportDictionary(
   return { filename: file.filename, contentType: file.contentType, content: file.body };
 }
 
+/** GET ws/:id/export/all -- the whole workspace as one JSON envelope
+ *  (backup + portability, design.md §14). Admin-gated: it carries everything,
+ *  including the audit log. */
+async function exportWorkspaceAll(workspaceId: string): Promise<unknown> {
+  await requireWorkspace(workspaceId, "admin", "dictionary:export");
+  const { email } = await identity();
+  const file = await buildWorkspaceExport(store, workspaceId, email);
+  await logActivity(store, {
+    workspaceId,
+    actorUserId: email,
+    action: "workspace.exported",
+    resourceType: "workspace",
+    resourceId: workspaceId,
+    metadata: { counts: file.counts },
+  });
+  return { filename: file.filename, contentType: file.contentType, content: file.content };
+}
+
 async function importPreview(
   workspaceId: string,
   body: unknown,
@@ -588,6 +636,33 @@ async function importCommit(
   const input = parseBody(importCommitSchema, body);
   const { email } = await identity();
   return commitImport(store, workspaceId, email, input.rows);
+}
+
+/** POST ws/:id/dictionary/starter -- one-click business starter pack for an
+ * empty dictionary. Idempotent; editors only. */
+async function addStarterDictionaryRoute(
+  workspaceId: string,
+): Promise<unknown> {
+  await requireWorkspace(workspaceId, "editor", "dictionary:write");
+  const result = await addStarterDictionary(store, workspaceId);
+  if (result.added > 0) {
+    await logActivity(store, {
+      workspaceId,
+      actorUserId: (await identity()).email,
+      action: "dictionary.starter_added",
+      resourceType: "dictionary",
+      resourceId: workspaceId,
+      metadata: { added: result.added, skipped: result.skipped },
+    });
+  }
+  return {
+    message:
+      result.added > 0
+        ? `${result.added} starter words added${result.skipped > 0 ? `, ${result.skipped} skipped (already present)` : ""}.`
+        : `Nothing to add — all ${result.skipped} starter words are already in your dictionary.`,
+    added: result.added,
+    skipped: result.skipped,
+  };
 }
 
 async function getEntry(workspaceId: string, entryId: string): Promise<unknown> {
@@ -801,8 +876,9 @@ async function getHistory(
 async function getLanguage(workspaceId: string): Promise<unknown> {
   await requireWorkspace(workspaceId, "viewer");
   const language = await getLanguageForWorkspace(store, workspaceId);
-  if (!language) return { language: null };
   const activeJob = await store.getActiveJob(workspaceId);
+  const dictionaryCount = await store.countEntries(workspaceId);
+  if (!language) return { language: null, dictionaryCount, activeJob: activeJob ?? null };
   const profile = getProfile(language);
   return {
     language: {
@@ -818,9 +894,11 @@ async function getLanguage(workspaceId: string): Promise<unknown> {
       rulesCount: profile?.grammarRules.length ?? 0,
       warnings: profile?.consistencyWarnings ?? [],
       versionSummary: profile?.versionSummary ?? "",
+      nameCandidates: profile?.nameCandidates ?? [],
       createdAt: language.created_at,
       updatedAt: language.updated_at,
     },
+    dictionaryCount,
     activeJob: activeJob ?? null,
   };
 }
@@ -836,6 +914,24 @@ async function generateLanguage(
     throw badRequest(
       "Your dictionary is empty, so there is nothing to generate a language from yet. Add or import words first, or start with the starter dictionary.",
       "dictionary_empty",
+    );
+  }
+  // Live job first: the more accurate 409 wins over the cooldown.
+  const active = await store.getActiveJob(workspaceId);
+  if (active) {
+    throw new HttpError(
+      409,
+      "A language generation is already running for this workspace. Wait for it to finish or cancel it.",
+      "job_active",
+    );
+  }
+  // Per-workspace 30s cooldown (spec §17). Honest framing: this runs in the
+  // app's own data layer, so it is an in-browser safeguard against accidental
+  // double-clicks and runaway loops -- not a server-side quota.
+  const latest = await store.getLatestJob(workspaceId);
+  if (latest && Date.now() - Date.parse(latest.created_at) < 30_000) {
+    throw tooMany(
+      "A generation was started for this workspace less than 30 seconds ago. Give it a moment, then try again.",
     );
   }
   const { email } = await identity();
@@ -874,6 +970,10 @@ async function getJobState(
     stages: safeParseStages(job),
     result: job.result_json ? JSON.parse(job.result_json) : null,
     error: job.error,
+    style: job.style,
+    referenceLangs: job.reference_langs,
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
   };
 }
 
@@ -883,6 +983,16 @@ async function cancelJob(
 ): Promise<unknown> {
   await requireWorkspace(workspaceId, "editor");
   const job = await cancelGenerationJob(store, jobId, workspaceId);
+  // Spec §15: cancellations are audited too -- a stopped generation changes
+  // the workspace's language state path, so it belongs in the record.
+  await logActivity(store, {
+    workspaceId,
+    actorUserId: (await identity()).email,
+    action: "generation.cancelled",
+    resourceType: "job",
+    resourceId: job.id,
+    metadata: { status: job.status },
+  });
   return { id: job.id, status: job.status };
 }
 
@@ -902,8 +1012,17 @@ async function getGrammar(workspaceId: string): Promise<unknown> {
     },
     writingSystem: profile.writingSystem,
     phonology: profile.phonology,
+    affixes: profile.affixes ?? null,
     wordFormation: profile.wordFormation,
     rules: profile.grammarRules,
+    exampleSentences: profile.exampleSentences,
+    vocabulary: profile.vocabulary.map((v) => ({
+      word: v.word,
+      bengaliMeaning: v.bengaliMeaning,
+      englishMeaning: v.englishMeaning,
+      partOfSpeech: v.partOfSpeech,
+      source: v.source,
+    })),
   };
 }
 
@@ -962,6 +1081,208 @@ async function restoreVersion(
   return {
     message: `Version ${version} restored as version ${newVersion}.`,
     version: newVersion,
+  };
+}
+
+/** Shared persistence for Grammar Workspace edits (design.md §11): mutate the
+ * parsed profile, bump the version, record a snapshot, log the activity --
+ * the same chain a restore goes through, so every rule edit is a version. */
+async function saveLanguageProfile(
+  workspaceId: string,
+  languageId: string,
+  currentVersion: number,
+  profile: NonNullable<ReturnType<typeof getProfile>>,
+  summary: string,
+  action: string,
+  metadata: Record<string, unknown>,
+): Promise<number> {
+  const { email } = await identity();
+  const newVersion = currentVersion + 1;
+  const now = nowIso();
+  const snapshot = JSON.stringify(profile);
+  await store.updateLanguage(languageId, {
+    version: newVersion,
+    profile_json: snapshot,
+    updated_at: now,
+  });
+  await store.insertVersion({
+    id: uid(),
+    workspace_id: workspaceId,
+    language_id: languageId,
+    version: newVersion,
+    snapshot_json: snapshot,
+    change_summary: summary,
+    created_by: email,
+    created_at: now,
+  });
+  await logActivity(store, {
+    workspaceId,
+    actorUserId: email,
+    action,
+    resourceType: "language",
+    resourceId: languageId,
+    metadata: { ...metadata, version: newVersion },
+  });
+  return newVersion;
+}
+
+async function requireLanguageProfile(workspaceId: string) {
+  const language = await getLanguageForWorkspace(store, workspaceId);
+  if (!language) throw notFound("No language has been generated yet");
+  const profile = getProfile(language);
+  if (!profile) throw notFound("Language profile is unreadable");
+  return { language, profile };
+}
+
+/** POST ws/:id/language/rules -- Grammar Workspace: add a rule as a new
+ * version (spec §11). Editors and up. */
+async function createGrammarRule(
+  workspaceId: string,
+  body: unknown,
+): Promise<unknown> {
+  await requireWorkspace(workspaceId, "editor", "language:edit");
+  const { language, profile } = await requireLanguageProfile(workspaceId);
+  if (profile.grammarRules.length >= 60) {
+    throw badRequest("This language already has the maximum of 60 grammar rules");
+  }
+  const input = parseBody(grammarRuleCreateSchema, body);
+  const rule = {
+    id: input.id ?? `rule-${uid().slice(0, 8)}`,
+    name: input.name,
+    category: input.category,
+    explanationEnglish: input.explanationEnglish,
+    explanationBengali: input.explanationBengali ?? "",
+    pattern: input.pattern ?? "",
+    validExamples: input.validExamples ?? [],
+    invalidExamples: input.invalidExamples ?? [],
+    introducedInVersion: language.version + 1,
+  };
+  if (profile.grammarRules.some((r) => r.id === rule.id)) {
+    throw conflict(`A rule with id "${rule.id}" already exists`);
+  }
+  profile.grammarRules = [...profile.grammarRules, rule];
+  const version = await saveLanguageProfile(
+    workspaceId,
+    language.id,
+    language.version,
+    profile,
+    `Rule added: ${rule.name}`,
+    "grammar.rule_added",
+    { ruleId: rule.id, name: rule.name },
+  );
+  return { message: `Rule "${rule.name}" added as version ${version}.`, rule, version };
+}
+
+/** PATCH ws/:id/language/rules/:ruleId -- edit a rule's content; its id and
+ * introducedInVersion stay put. */
+async function updateGrammarRule(
+  workspaceId: string,
+  ruleId: string,
+  body: unknown,
+): Promise<unknown> {
+  await requireWorkspace(workspaceId, "editor", "language:edit");
+  const { language, profile } = await requireLanguageProfile(workspaceId);
+  const index = profile.grammarRules.findIndex((r) => r.id === ruleId);
+  if (index === -1) throw notFound("Grammar rule not found");
+  const input = parseBody(grammarRuleUpdateSchema, body);
+  const before = profile.grammarRules[index]!;
+  const updated = {
+    ...before,
+    ...input,
+    id: before.id,
+    introducedInVersion: before.introducedInVersion,
+  };
+  profile.grammarRules[index] = updated;
+  const version = await saveLanguageProfile(
+    workspaceId,
+    language.id,
+    language.version,
+    profile,
+    `Rule updated: ${updated.name}`,
+    "grammar.rule_updated",
+    { ruleId, name: updated.name },
+  );
+  return { message: `Rule "${updated.name}" updated as version ${version}.`, rule: updated, version };
+}
+
+/** DELETE ws/:id/language/rules/:ruleId -- admin-only: a language's grammar
+ * must keep at least its five structural rules (schema minimum). */
+async function deleteGrammarRule(
+  workspaceId: string,
+  ruleId: string,
+): Promise<unknown> {
+  await requireWorkspace(workspaceId, "admin", "language:edit");
+  const { language, profile } = await requireLanguageProfile(workspaceId);
+  const index = profile.grammarRules.findIndex((r) => r.id === ruleId);
+  if (index === -1) throw notFound("Grammar rule not found");
+  if (profile.grammarRules.length <= 5) {
+    throw badRequest(
+      "A language keeps at least 5 grammar rules; add a replacement before removing this one",
+    );
+  }
+  const removed = profile.grammarRules[index]!;
+  profile.grammarRules = profile.grammarRules.filter((r) => r.id !== ruleId);
+  const version = await saveLanguageProfile(
+    workspaceId,
+    language.id,
+    language.version,
+    profile,
+    `Rule removed: ${removed.name}`,
+    "grammar.rule_removed",
+    { ruleId, name: removed.name },
+  );
+  return { message: `Rule "${removed.name}" removed as version ${version}.`, version };
+}
+
+/** GET ws/:id/language/versions/compare?a=&b= -- pure profile diff between
+ * two recorded versions (spec §16.10). */
+async function compareVersions(
+  workspaceId: string,
+  query: Record<string, string>,
+): Promise<unknown> {
+  await requireWorkspace(workspaceId, "viewer");
+  const language = await getLanguageForWorkspace(store, workspaceId);
+  if (!language) throw notFound("No language has been generated yet");
+  const a = Number(query.a);
+  const b = Number(query.b);
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a === b) {
+    throw badRequest("Pick two different versions to compare");
+  }
+  const [from, to] = await Promise.all([
+    store.getVersion(language.id, a),
+    store.getVersion(language.id, b),
+  ]);
+  if (!from || !to) throw notFound("Version not found");
+  const parseSnapshot = (
+    row: typeof from,
+  ): ReturnType<typeof languageProfileSchema.safeParse> | undefined => {
+    try {
+      return languageProfileSchema.safeParse(JSON.parse(row.snapshot_json));
+    } catch {
+      return undefined;
+    }
+  };
+  const fromProfile = parseSnapshot(from);
+  const toProfile = parseSnapshot(to);
+  if (!fromProfile?.success || !toProfile?.success) {
+    throw new HttpError(
+      422,
+      "A version snapshot is unreadable and cannot be compared",
+      "snapshot_unreadable",
+    );
+  }
+  return {
+    from: {
+      version: from.version,
+      name: fromProfile.data.name,
+      createdAt: from.created_at,
+    },
+    to: {
+      version: to.version,
+      name: toProfile.data.name,
+      createdAt: to.created_at,
+    },
+    diff: diffProfiles(fromProfile.data, toProfile.data),
   };
 }
 
@@ -1063,13 +1384,52 @@ async function addPhrase(
   return { id, message: "Saved to phrasebook." };
 }
 
+async function updatePhrase(
+  workspaceId: string,
+  phraseId: string,
+  body: unknown,
+): Promise<unknown> {
+  await requireWorkspace(workspaceId, "editor", "dictionary:write");
+  const input = parseBody(phrasebookUpdateSchema, body);
+  await store.updatePhrasebook(phraseId, workspaceId, input.note);
+  return { message: "Phrase note updated." };
+}
+
 async function removePhrase(
   workspaceId: string,
   phraseId: string,
 ): Promise<unknown> {
   await requireWorkspace(workspaceId, "editor", "dictionary:write");
   await store.deletePhrasebook(phraseId, workspaceId);
+  await logActivity(store, {
+    workspaceId,
+    actorUserId: (await identity()).email,
+    action: "phrasebook.removed",
+    resourceType: "phrasebook",
+    resourceId: phraseId,
+    metadata: {},
+  });
   return { message: "Removed from phrasebook." };
+}
+
+/** POST ws/:id/translate/flag -- "report incorrect" on a draft translation.
+ * The audit entry records direction, reason and confidence, never the text
+ * itself (design.md §15: audit entries stay privacy-safe). */
+async function flagTranslationRoute(
+  workspaceId: string,
+  body: unknown,
+): Promise<unknown> {
+  await requireWorkspace(workspaceId, "viewer");
+  const input = parseBody(translationFlagSchema, body);
+  await logActivity(store, {
+    workspaceId,
+    actorUserId: (await identity()).email,
+    action: "translation.flagged",
+    resourceType: "translation",
+    resourceId: workspaceId,
+    metadata: { from: input.from, to: input.to, reason: input.reason },
+  });
+  return { message: "Thanks — the draft was flagged. Nothing you typed was recorded." };
 }
 
 async function practiceQueue(
@@ -1078,8 +1438,8 @@ async function practiceQueue(
 ): Promise<unknown> {
   await requireWorkspace(workspaceId, "viewer", "dictionary:read");
   const modeParam = query.mode ?? "mixed";
-  const mode = (SCHEMA_PRACTICE_MODES as readonly string[]).includes(modeParam)
-    ? (modeParam as (typeof SCHEMA_PRACTICE_MODES)[number])
+  const mode = (PRACTICE_MODES as readonly string[]).includes(modeParam)
+    ? (modeParam as (typeof PRACTICE_MODES)[number])
     : "mixed";
   const limit = Math.min(20, Math.max(1, Number(query.limit) || 10));
   const { email } = await identity();
@@ -1129,6 +1489,23 @@ function flat(query: Record<string, string | string[]>): Record<string, string> 
    the UserProfile schema (keyed by lowercase email). */
 
 const AVATAR_STORAGE_CONFIG = "Default";
+
+/** Avatar events are user-scoped but the audit log is workspace-scoped
+ *  (spec §15): record them in every workspace the user belongs to. */
+async function logProfileEvent(action: string, metadata: Record<string, unknown>): Promise<void> {
+  const { email } = await identity();
+  const workspaces = await store.listWorkspaceSummaries(email);
+  for (const w of workspaces) {
+    await logActivity(store, {
+      workspaceId: w.id,
+      actorUserId: email,
+      action,
+      resourceType: "profile",
+      resourceId: email,
+      metadata,
+    });
+  }
+}
 
 /** Storage file extension per accepted image type -- presign requires a
  *  name with an allowed extension (blocks-data-storage skill). */
@@ -1232,6 +1609,7 @@ async function setAvatar(body: unknown): Promise<unknown> {
   if (previousFileId && previousFileId !== fileId) {
     await files.delete({ fileId: previousFileId, permanent: false }).catch(() => undefined);
   }
+  await logProfileEvent("profile.avatar_updated", {});
   return { fileId };
 }
 
@@ -1243,6 +1621,7 @@ async function deleteAvatar(): Promise<unknown> {
   if (previousFileId) {
     await files.delete({ fileId: previousFileId, permanent: false }).catch(() => undefined);
   }
+  await logProfileEvent("profile.avatar_removed", {});
   return { fileId: null };
 }
 
@@ -1326,6 +1705,9 @@ async function routeWorkspace(
       return getDashboard(workspaceId);
     case "activity":
       return getActivity(workspaceId, query);
+    case "export":
+      if (method === "GET") return exportWorkspaceAll(workspaceId);
+      throw methodNotAllowed();
     case "security":
       return getSecurity(workspaceId);
     case "members":
@@ -1347,11 +1729,15 @@ async function routeWorkspace(
         return approveWordRoute(workspaceId, body);
       throw notFound("API route not found");
     case "translate":
+      if (a === "flag" && method === "POST")
+        return flagTranslationRoute(workspaceId, body);
       if (method === "POST") return translateRoute(workspaceId, body);
       throw notFound("API route not found");
     case "phrasebook":
       if (segs.length === 1 && method === "GET") return listPhrasebook(workspaceId);
       if (segs.length === 1 && method === "POST") return addPhrase(workspaceId, body);
+      if (segs.length === 2 && a && method === "PATCH")
+        return updatePhrase(workspaceId, a, body);
       if (segs.length === 2 && a && method === "DELETE")
         return removePhrase(workspaceId, a);
       throw notFound("API route not found");
@@ -1385,6 +1771,7 @@ async function routeDictionary(
   // Explicit paths must win over :entryId.
   if (a === "template" && method === "GET") return getTemplate();
   if (a === "export" && method === "GET") return exportDictionary(workspaceId, query);
+  if (a === "starter" && method === "POST") return addStarterDictionaryRoute(workspaceId);
   if (a === "import" && b === "preview" && method === "POST")
     return importPreview(workspaceId, body);
   if (a === "import" && b === "commit" && method === "POST")
@@ -1406,7 +1793,7 @@ async function routeLanguage(
   method: string,
   workspaceId: string,
   segs: string[],
-  _query: Record<string, string>,
+  query: Record<string, string>,
   body: unknown,
 ): Promise<unknown> {
   const [a, b, c] = segs;
@@ -1421,8 +1808,13 @@ async function routeLanguage(
   if (a === "grammar" && method === "GET") return getGrammar(workspaceId);
   if (a === "versions" && segs.length === 1 && method === "GET")
     return listVersions(workspaceId);
+  if (a === "versions" && b === "compare" && method === "GET")
+    return compareVersions(workspaceId, query);
   if (a === "versions" && b && c === "restore" && method === "POST")
     return restoreVersion(workspaceId, b);
+  if (a === "rules" && method === "POST") return createGrammarRule(workspaceId, body);
+  if (a === "rules" && b && method === "PATCH") return updateGrammarRule(workspaceId, b, body);
+  if (a === "rules" && b && method === "DELETE") return deleteGrammarRule(workspaceId, b);
   if (a === "jobs" && b) {
     if (!c && method === "GET") return getJobState(workspaceId, b);
     if (c === "cancel" && method === "POST") return cancelJob(workspaceId, b);
@@ -1458,14 +1850,81 @@ async function request<T>(
   }
 }
 
-export const api = {
-  get: <T>(path: string) => request<T>("GET", path),
-  post: <T>(path: string, body?: unknown) =>
-    request<T>("POST", path, body ?? {}),
-  patch: <T>(path: string, body?: unknown) =>
-    request<T>("PATCH", path, body ?? {}),
-  del: <T>(path: string) => request<T>("DELETE", path),
+  return {
+    api: {
+      get: <T>(path: string) => request<T>("GET", path),
+      post: <T>(path: string, body?: unknown) =>
+        request<T>("POST", path, body ?? {}),
+      patch: <T>(path: string, body?: unknown) =>
+        request<T>("PATCH", path, body ?? {}),
+      del: <T>(path: string) => request<T>("DELETE", path),
+    },
+    request,
+  };
+}
+
+/* ----------------------------- browser wiring ------------------------------ */
+
+let emailCache: string | null = null;
+let nameCache = "";
+
+/** Identity: the email IAM attests for the caller's own token -- the same
+ * resolution the function performed. Memberships, ownership and activity
+ * actors key on it. Cached per tab: IAM is not asked twice. */
+const browserIdentity = async (): Promise<{ email: string; name: string }> => {
+  if (emailCache) return { email: emailCache, name: nameCache };
+  const claims = (await blocksClient.auth.userInfo()) as
+    | Record<string, unknown>
+    | undefined;
+  const email = String(
+    (claims?.email as string) ?? (claims?.preferred_username as string) ?? "",
+  )
+    .trim()
+    .toLowerCase();
+  if (!email) throw unauthorized("Please sign in to continue");
+  nameCache = String(
+    (claims?.name as string) ?? (claims?.given_name as string) ?? "",
+  ).trim();
+  emailCache = email;
+  return { email, name: nameCache };
 };
+
+/** GET me/organizations -- the caller's SELISE Blocks organizations (the IAM
+ * directory, read with the caller's own token). Best-effort: a directory
+ * hiccup answers an empty list, never a broken page. */
+const browserMyOrganizations =
+  async (): Promise<{ organizations: Array<{ id: string; name: string }> }> => {
+    try {
+      const res = await blocksClient.iam.organizations.my();
+      const list = ((res as Record<string, unknown>)?.organizations ??
+        []) as Array<Record<string, unknown>>;
+      return {
+        organizations: list
+          .map((o) => ({
+            id: String(o.itemId ?? ""),
+            name: String(o.name ?? "Unnamed organization"),
+          }))
+          .filter((o) => o.id),
+      };
+    } catch {
+      return { organizations: [] };
+    }
+  };
+
+/** The same DataStore implementation the function used, bound to the
+ * browser's own SDK client: every row read/write is a Gateway call made as
+ * the signed-in user. */
+const browserDeps: ApiRouterDeps = {
+  store: blocksStore(() => blocksClient),
+  /** Avatar file storage: presign, short-lived download URLs and trash -- the
+   * same calls the function made, now with the browser's own token (the one
+   * that always carried the storage permissions). */
+  files: blocksClient.data.files,
+  identity: browserIdentity,
+  organizations: browserMyOrganizations,
+};
+
+export const api = createApiRouter(browserDeps).api;
 
 /** Download an endpoint that answers with a { filename, contentType, content }
  *  envelope (the export routes) and save it client-side. */
@@ -1565,6 +2024,8 @@ export interface LanguageSummary {
   rulesCount: number;
   warnings: string[];
   versionSummary: string;
+  /** Runner-up names the generator considered (spec §16). */
+  nameCandidates: Array<{ name: string; nativeName: string }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -1596,6 +2057,17 @@ export interface GrammarData {
     prefixes: Array<{ affix: string; meaning: string }>;
     suffixes: Array<{ affix: string; meaning: string }>;
   };
+  /** The seven inflectional affixes; null only for profiles that predate
+   * affix recording. */
+  affixes: {
+    plural: string;
+    past: string;
+    future: string;
+    negation: string;
+    question: string;
+    genitive: string;
+    formal: string;
+  } | null;
   rules: Array<{
     id: string;
     name: string;
@@ -1606,6 +2078,24 @@ export interface GrammarData {
     validExamples: string[];
     invalidExamples: Array<{ example: string; why: string }>;
     introducedInVersion: number;
+  }>;
+  exampleSentences: Array<{
+    id: string;
+    constructed: string;
+    bengali: string;
+    english: string;
+    gloss: Array<{ token: string; meaning: string }>;
+    grammarNotes: string;
+    reviewStatus: "draft" | "approved";
+  }>;
+  /** Slim vocabulary list for the Grammar Workspace's business-terminology
+   * section; the Dictionary page remains the full listing. */
+  vocabulary: Array<{
+    word: string;
+    bengaliMeaning: string;
+    englishMeaning: string;
+    partOfSpeech: string;
+    source: "user" | "generated" | "imported";
   }>;
 }
 
@@ -1635,6 +2125,37 @@ export interface JobState {
     warnings: string[];
   } | null;
   error: string | null;
+  /** Generation settings and timestamps -- so a resumed job can be identified
+   * and honestly marked stale when its tab is gone. */
+  style: string | null;
+  referenceLangs: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** GET ws/:id/language/versions/compare response (spec §16.10). */
+export interface VersionCompare {
+  from: { version: number; name: string; createdAt: string };
+  to: { version: number; name: string; createdAt: string };
+  diff: {
+    nameChanged: boolean;
+    fromName: string;
+    toName: string;
+    wordOrderChanged: boolean;
+    fromWordOrder: string;
+    toWordOrder: string;
+    rulesAdded: Array<{ id: string; name: string; category: string }>;
+    rulesRemoved: Array<{ id: string; name: string; category: string }>;
+    rulesChanged: Array<{
+      before: { id: string; name: string };
+      after: { id: string; name: string };
+    }>;
+    vocabAdded: Array<{ word: string; partOfSpeech: string }>;
+    vocabRemoved: Array<{ word: string; partOfSpeech: string }>;
+    newWarnings: string[];
+    resolvedWarnings: string[];
+    summary: string;
+  };
 }
 
 export const PARTS_OF_SPEECH = [
@@ -1655,12 +2176,6 @@ export const GEN_STYLES = [
   "futuristic",
   "original",
 ] as const;
-export const PRACTICE_MODES = [
-  "word_to_bengali",
-  "word_to_english",
-  "bengali_to_word",
-  "english_to_word",
-  "fill_blank",
-  "choose_word",
-  "pronounciation",
-] as const;
+/** The canonical practice modes, straight from the schema enum -- the UI
+ * selector and the review route must never disagree on spellings. */
+export { PRACTICE_MODES };

@@ -209,6 +209,12 @@ export const grammarRuleSchema = z.object({
   introducedInVersion: z.number().int().min(1).default(1),
 });
 
+/* Grammar Workspace rule CRUD (design.md §11). Create may let the client
+ * propose an id; the server mints one when absent. Update never touches the
+ * id or the version the rule was introduced in. */
+export const grammarRuleCreateSchema = grammarRuleSchema.partial({ id: true });
+export const grammarRuleUpdateSchema = grammarRuleSchema.omit({ id: true }).partial();
+
 export const wordFormationSchema = z.object({
   prefixes: z
     .array(
@@ -245,6 +251,17 @@ export const vocabularyItemSchema = z.object({
 export const languageProfileSchema = z.object({
   name: z.string().trim().min(2).max(40),
   nativeName: z.string().trim().max(80).default(""),
+  // The runner-up names the engine considered before uniqueness checks chose
+  // the final one (spec §16: candidate language names are part of the output).
+  nameCandidates: z
+    .array(
+      z.object({
+        name: z.string().min(2).max(40),
+        nativeName: z.string().max(80).default(""),
+      }),
+    )
+    .max(30)
+    .default([]),
   description: z.string().trim().min(10).max(400),
   writingSystem: z.object({
     type: z.string().min(2).max(80),
@@ -319,6 +336,19 @@ export const phrasebookAddSchema = z.object({
   translatedText: z.string().trim().min(1).max(2000),
   targetLang: z.enum(TRANSLATE_LANGS),
   note: z.string().trim().max(400).default(""),
+});
+
+export const phrasebookUpdateSchema = z.object({
+  note: z.string().trim().max(400).default(""),
+});
+
+/* "Report incorrect" on a translation draft. Deliberately carries NO source
+ * or translated text: the audit log stays useful without recording what the
+ * user was translating (design.md §15 privacy rule). */
+export const translationFlagSchema = z.object({
+  from: z.enum(TRANSLATE_LANGS),
+  to: z.enum(TRANSLATE_LANGS),
+  reason: z.string().trim().max(400).default(""),
 });
 
 /* ------------------------------ practice schemas --------------------------- */

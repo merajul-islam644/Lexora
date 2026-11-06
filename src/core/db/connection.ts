@@ -147,7 +147,10 @@ const MIGRATIONS: string[] = [
 
   CREATE TABLE IF NOT EXISTS activity_log (
     id TEXT PRIMARY KEY,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- Nullable on purpose: audit tombstones outlive the workspace they
+    -- describe (spec §15). A workspace delete detaches its log rows instead
+    -- of destroying the record of what happened there.
+    workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
     actor_user_id TEXT,
     action TEXT NOT NULL,
     resource_type TEXT NOT NULL DEFAULT '',
@@ -159,11 +162,41 @@ const MIGRATIONS: string[] = [
   `
 ];
 
+/* Older database files carry the original "NOT NULL ... ON DELETE CASCADE"
+   activity_log, which erased the audit trail on workspace delete. Rebuild the
+   table once when the legacy shape is detected (idempotent; fresh databases
+   already get the nullable column above). */
+function rebuildActivityLogIfLegacy(db: Db): void {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'activity_log'")
+    .get() as { sql?: string } | undefined;
+  if (!row?.sql || !/workspace_id\s+TEXT\s+NOT\s+NULL\s+REFERENCES/i.test(row.sql)) return;
+  db.exec(`
+    CREATE TABLE activity_log_new (
+      id TEXT PRIMARY KEY,
+      workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
+      actor_user_id TEXT,
+      action TEXT NOT NULL,
+      resource_type TEXT NOT NULL DEFAULT '',
+      resource_id TEXT NOT NULL DEFAULT '',
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    );
+    INSERT INTO activity_log_new
+      SELECT id, workspace_id, actor_user_id, action, resource_type, resource_id, metadata_json, created_at
+      FROM activity_log;
+    DROP TABLE activity_log;
+    ALTER TABLE activity_log_new RENAME TO activity_log;
+  `);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_activity_workspace ON activity_log(workspace_id, created_at);");
+}
+
 export function openDatabase(dbPath: string): Db {
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
   db.exec("PRAGMA busy_timeout = 5000;");
   for (const migration of MIGRATIONS) db.exec(migration);
+  rebuildActivityLogIfLegacy(db);
   return db;
 }

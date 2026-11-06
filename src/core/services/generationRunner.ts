@@ -115,22 +115,31 @@ export async function cancelGenerationJob(
   return getJob(store, jobId);
 }
 
+const TERMINAL_JOB_STATUSES: JobRow["status"][] = [
+  "completed",
+  "failed",
+  "cancelled",
+  "timeout",
+];
+
 async function setJobStatus(
   store: DataStore,
   jobId: string,
   status: JobRow["status"],
   patch: { error?: string; result?: JobResult } = {},
 ): Promise<void> {
+  // Race guard: a job the user cancelled (or that already failed) is never
+  // resurrected or overwritten by a runner still in flight. Cancellation goes
+  // through store.updateJob directly, so once a terminal status is on disk it
+  // is final; the stale runner just stops writing.
+  const current = await store.getJob(jobId);
+  if (current && TERMINAL_JOB_STATUSES.includes(current.status)) return;
   await store.updateJob(jobId, {
     status,
     error: patch.error ?? null,
     result_json: patch.result ? JSON.stringify(patch.result) : null,
     updated_at: nowIso(),
-    finished_at: ["completed", "failed", "cancelled", "timeout"].includes(
-      status,
-    )
-      ? nowIso()
-      : null,
+    finished_at: TERMINAL_JOB_STATUSES.includes(status) ? nowIso() : null,
   });
 }
 
@@ -418,6 +427,12 @@ async function persistLanguage(
     const norm = normalizeWord(item.word);
     if (existingWords.has(norm)) continue;
     existingWords.add(norm);
+    // Generated example sentences that use this word attach to the draft
+    // entry, so the dictionary shows words in context (capped by the entry
+    // schema; the profile keeps the full reviewed list).
+    const sentences = params.profile.exampleSentences
+      .filter((s) => s.gloss.some((g) => normalizeWord(g.token) === norm))
+      .slice(0, 20);
     await store.insertEntry({
       id: uid(),
       workspace_id: params.workspaceId,
@@ -434,7 +449,7 @@ async function persistLanguage(
       prefixes: "",
       suffixes: "",
       grammar_notes: "",
-      example_sentences_json: "[]",
+      example_sentences_json: JSON.stringify(sentences),
       related_word_ids_json: "[]",
       mnemonic: "",
       learning_status: "new",

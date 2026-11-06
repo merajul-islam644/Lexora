@@ -13,6 +13,8 @@ export interface EntryListOpts {
   pos?: string;
   learning?: string;
   source?: string;
+  /** Approval state: "draft" | "approved" | "" for all. */
+  status?: string;
   sort?: "alpha" | "newest" | "updated" | "needs_revision";
   limit: number;
   offset: number;
@@ -151,6 +153,12 @@ export interface DataStore {
   getJob(id: string): Promise<JobRow | undefined>;
   getActiveJob(workspaceId: string): Promise<{ id: string } | undefined>;
   countJobs(workspaceId: string): Promise<number>;
+  /** Every job ever run for the workspace (any status) — used by the
+   *  full-workspace export (backup/portability, spec §14). */
+  listJobs(workspaceId: string): Promise<JobRow[]>;
+  /** The most recent job of the workspace, any status — powers the
+   *  per-workspace generate cooldown (spec §17). */
+  getLatestJob(workspaceId: string): Promise<{ id: string; created_at: string } | undefined>;
   insertJob(row: JobRow): Promise<void>;
   updateJob(id: string, patch: Partial<JobRow>): Promise<void>;
 
@@ -158,10 +166,15 @@ export interface DataStore {
   insertActivity(row: ActivityRow): Promise<void>;
   listActivity(workspaceId: string, limit: number, offset: number): Promise<ActivityListResult>;
   countActivity(workspaceId: string, action?: string): Promise<number>;
+  /** Audit rows whose workspace no longer exists (tombstones). Never shown
+   *  in the app; exists so the post-mortem record stays reachable (spec §15). */
+  listDetachedActivity(): Promise<ActivityRow[]>;
 
   /* -------------------------------- phrasebook ----------------------------- */
   listPhrasebook(workspaceId: string, limit: number): Promise<PhraseRow[]>;
   insertPhrasebook(row: PhraseRow): Promise<void>;
+  /** Edits the user's private note on a saved phrase (Translation Lab). */
+  updatePhrasebook(id: string, workspaceId: string, note: string): Promise<void>;
   deletePhrasebook(id: string, workspaceId: string): Promise<void>;
 
   /* ---------------------------- learning progress -------------------------- */

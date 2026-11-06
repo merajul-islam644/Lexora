@@ -13,6 +13,12 @@ export interface PracticeItem {
   partOfSpeech: string;
   mode: PracticeMode;
   status: string;
+  /** Deterministic MCQ options (correct word first shuffled in) for the
+   * multiple-choice modes; absent for typed and self-report modes. */
+  options?: string[];
+  /** An example sentence with the target word blanked out, for fill_blank
+   * and choose_word context; absent when no sentence mentions the word. */
+  contextSentence?: string;
 }
 
 export interface PracticeStats {
@@ -35,6 +41,65 @@ const MODES: PracticeMode[] = [
   "pronunciation"
 ];
 
+const MCQ_MODES = new Set<PracticeMode>(["bengali_to_word", "english_to_word", "choose_word"]);
+
+/** Small deterministic string hash so MCQ distractors are stable per item. */
+function stableSeed(text: string): number {
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+  return Math.abs(h) || 1;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+interface StoredSentence {
+  constructed?: string;
+  english?: string;
+}
+
+function readSentences(json: string): StoredSentence[] {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as StoredSentence[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Picks 3 deterministic distractor words and shuffles them with the answer. */
+function buildOptions(answer: string, pool: string[], seedText: string): string[] {
+  const seed = stableSeed(seedText);
+  const picks: string[] = [];
+  for (let i = 0; i < pool.length && picks.length < 3; i++) {
+    const candidate = pool[(seed + i * 7) % pool.length];
+    if (candidate !== answer && !picks.includes(candidate)) picks.push(candidate);
+  }
+  const options = [answer, ...picks];
+  // Deterministic LCG shuffle.
+  let s = seed;
+  const rand = () => {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+  return options;
+}
+
+/** The first stored example sentence that uses the word, with the word
+ * blanked out; null when none does. */
+function buildContextSentence(word: string, sentencesJson: string): string | null {
+  const hit = readSentences(sentencesJson).find(
+    (s) => s.constructed && new RegExp(escapeRegExp(word), "i").test(s.constructed),
+  );
+  if (!hit?.constructed) return null;
+  return hit.constructed.replace(new RegExp(escapeRegExp(word), "i"), "____");
+}
+
 /** Words due for review. A word the user has never seen counts as due. */
 export async function getPracticeQueue(
   store: DataStore,
@@ -56,16 +121,27 @@ export async function getPracticeQueue(
     .sort((a, b) => (a.p?.next_review_at ?? "").localeCompare(b.p?.next_review_at ?? "") || a.entry.created_at.localeCompare(b.entry.created_at))
     .slice(0, Math.min(50, Math.max(1, limit)));
 
-  return due.map(({ entry, p }, index) => ({
-    entryId: entry.id,
-    word: entry.word,
-    bengaliMeaning: entry.bengali_meaning,
-    englishMeaning: entry.english_meaning,
-    pronunciationGuide: entry.pronunciation_guide,
-    partOfSpeech: entry.part_of_speech,
-    mode: mode === "mixed" ? MODES[index % MODES.length] : mode,
-    status: p?.status ?? "new"
-  }));
+  const pool = approved.filter((e) => e.word && e.word !== "").map((e) => e.word);
+  return due.map(({ entry, p }, index) => {
+    const chosenMode: PracticeMode = mode === "mixed" ? MODES[index % MODES.length] : mode;
+    const item: PracticeItem = {
+      entryId: entry.id,
+      word: entry.word,
+      bengaliMeaning: entry.bengali_meaning,
+      englishMeaning: entry.english_meaning,
+      pronunciationGuide: entry.pronunciation_guide,
+      partOfSpeech: entry.part_of_speech,
+      mode: chosenMode,
+      status: p?.status ?? "new"
+    };
+    if (MCQ_MODES.has(chosenMode)) {
+      item.options = buildOptions(entry.word, pool, `${entry.id}:${chosenMode}`);
+    }
+    if (chosenMode === "fill_blank" || chosenMode === "choose_word") {
+      item.contextSentence = buildContextSentence(entry.word, entry.example_sentences_json) ?? undefined;
+    }
+    return item;
+  });
 }
 
 /**

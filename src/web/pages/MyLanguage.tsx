@@ -1,39 +1,100 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, CircleDashed, Loader2, RotateCcw } from "lucide-react";
-import { api, type GrammarData, type JobState, type LanguageSummary } from "../api.js";
+import {
+  api,
+  downloadFile,
+  ApiError,
+  type GrammarData,
+  type JobState,
+  type LanguageSummary,
+  type VersionCompare,
+} from "../api.js";
+import { describeApiError } from "../errors.js";
 import { useSession } from "../state.js";
 import { toast } from "sonner";
-import { Badge, Button, ConfirmDialog, EmptyState, ErrorNote, Field, HonestNote, Input, LoadingScreen, Modal, PageHeader, Select, Stat } from "../ui.js";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  ErrorNote,
+  Field,
+  HonestNote,
+  Input,
+  LoadingScreen,
+  Modal,
+  PageHeader,
+  Select,
+} from "../ui.js";
 import { formatWhen } from "./Dashboard.js";
 import { GEN_STYLES } from "../api.js";
 
-/* My Language: generation (with honest stage progress), grammar review,
- * versions with restore, and rename. */
+/* My Language: generation (with honest stage progress, resume across reloads,
+ * cancel/retry), grammar review (sounds, affixes, example sentences),
+ * version compare/restore, and rename. */
 
 type Workspace = { id: string; name: string; role: "owner" | "admin" | "editor" | "viewer" };
+
+const TERMINAL_STATUSES = ["completed", "failed", "cancelled", "timeout"];
+/** A queued/running job silent this long is almost certainly orphaned: the
+ * tab that ran it was closed. Said honestly, never silently retried. */
+const STALE_AFTER_MS = 60_000;
+
+function isStale(job: JobState): boolean {
+  return (
+    !TERMINAL_STATUSES.includes(job.status) &&
+    job.updatedAt !== null &&
+    Date.now() - Date.parse(job.updatedAt) > STALE_AFTER_MS
+  );
+}
 
 export function MyLanguage({ workspace }: { workspace: Workspace }) {
   const [language, setLanguage] = useState<LanguageSummary | null>(null);
   const [job, setJob] = useState<JobState | null>(null);
   const [loading, setLoading] = useState(true);
   const [genOpen, setGenOpen] = useState(false);
+  const [genPreset, setGenPreset] = useState<{ style: string; referenceLangs: string } | null>(null);
   const [regenConfirm, setRegenConfirm] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [grammar, setGrammar] = useState<GrammarData | null>(null);
   const [versions, setVersions] = useState<Array<{ version: number; change_summary: string; created_at: string }>>([]);
+  const [dictionaryCount, setDictionaryCount] = useState<number | null>(null);
+  const [starterBusy, setStarterBusy] = useState(false);
+  const [compare, setCompare] = useState<{ a: number; b: number } | null>(null);
   const { workspaces } = useSession();
   const role = workspaces.find((w) => w.id === workspace.id)?.role ?? workspace.role;
   // TODO(iam-roles): local workspace ladder, not IAM roles (src/core/types.ts)
   const canEdit = role === "owner" || role === "admin" || role === "editor";
 
   const load = useCallback(async () => {
-    const res = await api.get<{ language: LanguageSummary | null; activeJob: { id: string; status: string } | null }>(
-      `/api/ws/${workspace.id}/language`
-    );
+    const res = await api.get<{
+      language: LanguageSummary | null;
+      activeJob: { id: string } | null;
+      dictionaryCount?: number;
+    }>(`/api/ws/${workspace.id}/language`);
     setLanguage(res.language);
-    setJob(null);
-    return res.activeJob?.id ?? null;
+    setDictionaryCount(res.dictionaryCount ?? null);
+    const activeId = res.activeJob?.id ?? null;
+    if (!activeId) {
+      setJob(null);
+      return null;
+    }
+    // Reload mid-generation: rebuild the progress panel from the persisted
+    // job instead of losing it (spec §17 -- keep the page usable).
+    const state = await api
+      .get<JobState>(`/api/ws/${workspace.id}/language/jobs/${activeId}`)
+      .catch(() => null);
+    setJob(state);
+    return activeId;
+  }, [workspace.id]);
+
+  const refreshSideData = useCallback(() => {
+    void api.get<GrammarData>(`/api/ws/${workspace.id}/language/grammar`).then(setGrammar).catch(() => setGrammar(null));
+    void api
+      .get<{ versions: Array<{ version: number; change_summary: string; created_at: string }> }>(`/api/ws/${workspace.id}/language/versions`)
+      .then((r) => setVersions(r.versions))
+      .catch(() => setVersions([]));
   }, [workspace.id]);
 
   useEffect(() => {
@@ -43,22 +104,19 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
   useEffect(() => {
     setLoading(true);
     void load().finally(() => setLoading(false));
-    void api.get<GrammarData>(`/api/ws/${workspace.id}/language/grammar`).then(setGrammar).catch(() => setGrammar(null));
-    void api.get<{ versions: Array<{ version: number; change_summary: string; created_at: string }> }>(`/api/ws/${workspace.id}/language/versions`)
-      .then((r) => setVersions(r.versions))
-      .catch(() => setVersions([]));
-  }, [load, workspace.id]);
+    refreshSideData();
+  }, [load, refreshSideData]);
 
   // Poll the active job until it reaches a terminal state.
   const pollRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!job || ["completed", "failed", "cancelled", "timeout"].includes(job.status)) return;
+    if (!job || TERMINAL_STATUSES.includes(job.status)) return;
     pollRef.current = window.setInterval(() => {
       void (async () => {
         try {
           const next = await api.get<JobState>(`/api/ws/${workspace.id}/language/jobs/${job.id}`);
           setJob(next);
-          if (["completed", "failed", "cancelled", "timeout"].includes(next.status)) {
+          if (TERMINAL_STATUSES.includes(next.status)) {
             window.clearInterval(pollRef.current ?? undefined);
             if (next.status === "completed" && next.result) {
               toast.success(`Language "${next.result.name}" is ready (version ${next.result.version}).`);
@@ -68,11 +126,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
               toast.error("Generation took too long and was stopped. Nothing was saved; you can retry.");
             }
             await load();
-            void api.get<GrammarData>(`/api/ws/${workspace.id}/language/grammar`).then(setGrammar).catch(() => setGrammar(null));
-            void api
-              .get<{ versions: Array<{ version: number; change_summary: string; created_at: string }> }>(`/api/ws/${workspace.id}/language/versions`)
-              .then((r) => setVersions(r.versions))
-              .catch(() => setVersions([]));
+            refreshSideData();
           }
         } catch {
           /* transient polling error — try again on the next tick */
@@ -80,9 +134,56 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
       })();
     }, 1200);
     return () => window.clearInterval(pollRef.current ?? undefined);
-  }, [job, workspace.id, load, toast]);
+  }, [job, workspace.id, load, refreshSideData]);
+
+  const addStarter = async () => {
+    setStarterBusy(true);
+    try {
+      const res = await api.post<{ message: string }>(`/api/ws/${workspace.id}/dictionary/starter`, {});
+      toast.success(res.message);
+      await load();
+    } catch (err) {
+      toast.error(describeApiError(err, "Could not add the starter dictionary"));
+    } finally {
+      setStarterBusy(false);
+    }
+  };
+
+  const cancelJob = async () => {
+    if (!job) return;
+    try {
+      await api.post(`/api/ws/${workspace.id}/language/jobs/${job.id}/cancel`);
+      toast.success("Generation cancelled. Nothing was saved.");
+      await load();
+    } catch (err) {
+      toast.error(describeApiError(err, "Could not cancel the job"));
+    }
+  };
+
+  const retryJob = () => {
+    setGenPreset(
+      job?.style && job?.referenceLangs
+        ? { style: job.style, referenceLangs: job.referenceLangs }
+        : null,
+    );
+    setGenOpen(true);
+  };
+
+  const [exporting, setExporting] = useState(false);
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      await downloadFile(`/api/ws/${workspace.id}/dictionary/export?format=csv`);
+    } catch (err) {
+      toast.error(describeApiError(err, "Export failed"));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading) return <LoadingScreen />;
+
+  const considered = (language?.nameCandidates ?? []).filter((c) => c.name !== language?.name);
 
   return (
     <div>
@@ -93,7 +194,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
           language && canEdit ? (
             <>
               <Button variant="outline" onClick={() => setRenameOpen(true)}>Rename</Button>
-              <Button onClick={() => setRegenConfirm(true)}>
+              <Button onClick={() => { setGenPreset(null); setRegenConfirm(true); }}>
                 <RotateCcw size={15} /> Generate new version
               </Button>
             </>
@@ -104,11 +205,18 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
       {!language && !job && (
         <EmptyState
           icon={<SparklesIcon />}
-          title="No language yet"
-          body="Your dictionary is the raw material. Generate a language from it: sound rules, words, grammar and example sentences, all reviewable."
+          title="Create your private language"
+          body="Generate a language with its own name, vocabulary, pronunciation, and grammar, connected to your Bengali and English references."
           action={
             canEdit ? (
-              <Button onClick={() => setGenOpen(true)}>Generate my language</Button>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                <Button onClick={() => { setGenPreset(null); setGenOpen(true); }}>Generate My Language</Button>
+                <Link to="/app/dictionary" className="btn btn-outline" style={{ textDecoration: "none" }}>Add Dictionary Words</Link>
+                <Link to="/app/dictionary?import=1" className="btn btn-outline" style={{ textDecoration: "none" }}>Import Dictionary</Link>
+                <Button variant="outline" onClick={addStarter} disabled={starterBusy}>
+                  {starterBusy ? "Adding…" : "Start with the starter dictionary"}
+                </Button>
+              </div>
             ) : (
               <p className="bilingual">Ask an editor or admin to generate the language.</p>
             )
@@ -116,14 +224,14 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
         />
       )}
 
-      {job && !language && <JobProgress job={job} />}
+      {job && !language && <JobProgress job={job} onCancel={canEdit ? cancelJob : undefined} onRetry={canEdit ? retryJob : undefined} />}
 
       {language && (
         <>
           <div className="hero-language">
             <span className="badge">Private to your workspace · v{language.version}</span>
             <div className="native">
-              {language.name} <span className="bn">{language.nativeName}</span>
+              {language.name} <span className="bn" lang="bn">{language.nativeName}</span>
             </div>
             <p className="desc">{language.description}</p>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 12, fontSize: 13, color: "#C9D5E2" }}>
@@ -131,18 +239,45 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
               <span>Style: <strong style={{ color: "#fff" }}>{language.style ?? ""}</strong></span>
               <span>Words: <strong style={{ color: "#fff" }}>{language.vocabularyCount}</strong></span>
               <span>Rules: <strong style={{ color: "#fff" }}>{language.rulesCount}</strong></span>
+              <span>Created: <strong style={{ color: "#fff" }}>{formatWhen(language.createdAt)}</strong></span>
             </div>
+            {language.versionSummary && (
+              <p className="bilingual" style={{ margin: "8px 0 0", fontSize: 13, color: "#C9D5E2" }}>{language.versionSummary}</p>
+            )}
+            {considered.length > 0 && (
+              <div style={{ marginTop: 10, fontSize: 13, color: "#C9D5E2" }}>
+                Names considered:{" "}
+                <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", verticalAlign: "middle" }}>
+                  {considered.map((c) => (
+                    <span key={c.name} className="chip" style={{ background: "rgba(255,255,255,0.12)", color: "#fff", borderColor: "transparent" }}>{c.name}</span>
+                  ))}
+                </span>
+              </div>
+            )}
             <div className="actions">
               <Link to="/app/dictionary" className="btn btn-outline" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }}>
-                Explore Dictionary
+                Open Dictionary
               </Link>
-              <Link to="/app/translate" className="btn btn-outline" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }}>
-                Translation Lab
+              <Link to="/app/grammar" className="btn btn-outline" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }}>
+                Open Grammar Workspace
               </Link>
+              <Link to="/app/practice" className="btn btn-outline" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }}>
+                Practice
+              </Link>
+              <button type="button" className="btn btn-outline" style={{ background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }} onClick={exportCsv} disabled={exporting}>
+                {exporting ? "Preparing…" : "Export"}
+              </button>
             </div>
           </div>
 
-          {job && <JobProgress job={job} style={{ marginTop: 16 }} />}
+          {job && (
+            <JobProgress
+              job={job}
+              style={{ marginTop: 16 }}
+              onCancel={canEdit ? cancelJob : undefined}
+              onRetry={canEdit ? retryJob : undefined}
+            />
+          )}
 
           {language.warnings.length > 0 && (
             <div className="card" style={{ marginTop: 16 }}>
@@ -155,7 +290,30 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
             </div>
           )}
 
-          {grammar && <GrammarReview grammar={grammar} />}
+          {grammar && (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-title">
+                <h3>Grammar & sound rules</h3>
+                <span className="bilingual">
+                  {grammar.rules.length} rules · {grammar.exampleSentences.length} example sentences
+                </span>
+              </div>
+              <p className="bilingual" style={{ marginBottom: 4 }}>
+                Syllable rules: {grammar.phonology.syllableStructures.join(", ")}
+              </p>
+              {grammar.affixes && (
+                <p className="bilingual" style={{ marginBottom: 4 }}>
+                  Inflectional affixes: plural <code>-{grammar.affixes.plural}</code>, past <code>-{grammar.affixes.past}</code>, question <code>-{grammar.affixes.question}</code> … all seven live in the workspace.
+                </p>
+              )}
+              <p className="bilingual" style={{ marginBottom: 10 }}>
+                The full rulebook — sound inventory, word order, every rule with bilingual explanations, editable — has its own page now.
+              </p>
+              <Link to="/app/grammar" className="btn btn-primary" style={{ textDecoration: "none" }}>
+                Open Grammar Workspace
+              </Link>
+            </div>
+          )}
         </>
       )}
 
@@ -182,16 +340,17 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
                     <td>{v.change_summary}</td>
                     <td className="bilingual">{formatWhen(v.created_at)}</td>
                     <td>
-                      {canEdit && v.version !== language?.version && (
-                        <RestoreButton workspaceId={workspace.id} version={v.version} onDone={async () => {
-                          await load();
-                          void api.get<GrammarData>(`/api/ws/${workspace.id}/language/grammar`).then(setGrammar).catch(() => setGrammar(null));
-                          void api
-                            .get<{ versions: Array<{ version: number; change_summary: string; created_at: string }> }>(`/api/ws/${workspace.id}/language/versions`)
-                            .then((r) => setVersions(r.versions))
-                            .catch(() => setVersions([]));
-                        }} />
-                      )}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {versions.length > 1 && (
+                          <Button variant="outline" size="sm" onClick={() => openCompare(v.version)}>Compare</Button>
+                        )}
+                        {canEdit && v.version !== language?.version && (
+                          <RestoreButton workspaceId={workspace.id} version={v.version} onDone={async () => {
+                            await load();
+                            refreshSideData();
+                          }} />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -201,10 +360,23 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
         </div>
       )}
 
+      {compare && (
+        <CompareModal
+          workspaceId={workspace.id}
+          versions={versions}
+          initialA={compare.a}
+          initialB={compare.b}
+          onClose={() => setCompare(null)}
+        />
+      )}
+
       {genOpen && (
         <GenerateDialog
           workspaceId={workspace.id}
+          workspaceName={workspace.name}
           hasLanguage={Boolean(language)}
+          dictionaryCount={dictionaryCount}
+          preset={genPreset}
           onClose={() => setGenOpen(false)}
           onStarted={(j) => {
             setGenOpen(false);
@@ -241,6 +413,14 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
       )}
     </div>
   );
+
+  function openCompare(version: number) {
+    const other =
+      version !== language?.version
+        ? language!.version
+        : versions.find((v) => v.version !== version)?.version ?? version;
+    setCompare({ a: Math.min(version, other), b: Math.max(version, other) });
+  }
 }
 
 function SparklesIcon() {
@@ -251,25 +431,47 @@ function SparklesIcon() {
 
 function GenerateDialog({
   workspaceId,
+  workspaceName,
   hasLanguage,
+  dictionaryCount,
+  preset,
   onClose,
   onStarted
 }: {
   workspaceId: string;
+  workspaceName: string;
   hasLanguage: boolean;
+  dictionaryCount: number | null;
+  preset: { style: string; referenceLangs: string } | null;
   onClose: () => void;
   onStarted: (job: JobState) => void;
 }) {
-  const [style, setStyle] = useState<string>("naturalistic");
-  const [referenceLangs, setReferenceLangs] = useState("both");
+  const [style, setStyle] = useState<string>(preset?.style ?? "naturalistic");
+  const [referenceLangs, setReferenceLangs] = useState(preset?.referenceLangs ?? "both");
   const [preferredName, setPreferredName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [emptyDictionary, setEmptyDictionary] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const addStarterInline = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.post<{ message: string }>(`/api/ws/${workspaceId}/dictionary/starter`, {});
+      toast.success(res.message);
+      setEmptyDictionary(false);
+    } catch (err) {
+      setError(describeApiError(err, "Could not add the starter dictionary"));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setEmptyDictionary(false);
     try {
       const res = await api.post<{ jobId: string }>(`/api/ws/${workspaceId}/language/generate`, {
         style,
@@ -281,10 +483,19 @@ function GenerateDialog({
         status: "queued",
         stages: [],
         result: null,
-        error: null
+        error: null,
+        style,
+        referenceLangs,
+        createdAt: null,
+        updatedAt: null
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation could not start");
+      if (err instanceof ApiError && err.details === "dictionary_empty") {
+        setEmptyDictionary(true);
+        setError("Your dictionary is empty, so there is nothing to generate a language from yet.");
+      } else {
+        setError(describeApiError(err, "Generation could not start"));
+      }
       setBusy(false);
     }
   };
@@ -296,6 +507,15 @@ function GenerateDialog({
           The new version is built from your current dictionary. Your previous version stays available under Versions.
         </HonestNote>
       )}
+      {/* Setup summary (design.md §8): what the language will be built from. */}
+      <div className="card" style={{ margin: "0 0 14px", padding: "12px 14px", background: "var(--surface-2, rgba(127,127,127,0.08))" }}>
+        <p style={{ margin: "0 0 4px", fontSize: 14 }}><strong>{workspaceName}</strong></p>
+        <p className="bilingual" style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
+          {dictionaryCount === null
+            ? "Dictionary entries: loading…"
+            : `${dictionaryCount} dictionary ${dictionaryCount === 1 ? "entry" : "entries"} will be mapped into the language.`}
+        </p>
+      </div>
       <form onSubmit={submit} noValidate>
         <Field label="Preferred name (optional)" hint="Leave empty and Lexora will invent one. If it's already taken by another workspace, you'll get a unique alternative.">
           <Input value={preferredName} onChange={(e) => setPreferredName(e.target.value)} maxLength={40} placeholder="e.g. Nerava" />
@@ -317,6 +537,14 @@ function GenerateDialog({
           </Select>
         </Field>
         <ErrorNote message={error} />
+        {emptyDictionary && (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+            <Button type="button" variant="outline" onClick={addStarterInline} disabled={busy}>
+              Add starter words
+            </Button>
+            <Link to="/app/dictionary?import=1" className="btn btn-outline" style={{ textDecoration: "none" }}>Import words</Link>
+          </div>
+        )}
         <div className="modal-actions">
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button type="submit" disabled={busy}>{busy ? "Starting…" : "Start generation"}</Button>
@@ -328,22 +556,46 @@ function GenerateDialog({
 
 /* ------------------------------- job progress -------------------------------- */
 
-function JobProgress({ job, style }: { job: JobState; style?: React.CSSProperties }) {
+function JobProgress({
+  job,
+  style,
+  onCancel,
+  onRetry,
+}: {
+  job: JobState;
+  style?: React.CSSProperties;
+  onCancel?: () => void;
+  onRetry?: () => void;
+}) {
+  const stale = isStale(job);
+  const live = !TERMINAL_STATUSES.includes(job.status);
+  const notes = (job.result?.warnings ?? []).filter((w) => w !== "No consistency problems found.");
+
   return (
     <div className="card" style={style} aria-live="polite">
       <div className="card-title">
         <h3>
           {job.status === "completed" ? "Generation complete" : job.status === "failed" ? "Generation failed" : job.status === "cancelled" ? "Generation cancelled" : job.status === "timeout" ? "Generation timed out" : "Generating your language…"}
         </h3>
-        {job.status === "completed" && job.result && <Badge tone="green">v{job.result.version}</Badge>}
+        {job.status === "completed" && job.result && (
+          <>
+            {notes.length > 0 && <Badge tone="amber">Completed with {notes.length} consistency {notes.length === 1 ? "note" : "notes"}</Badge>}
+            <Badge tone="green">v{job.result.version}</Badge>
+          </>
+        )}
       </div>
+      {stale && (
+        <HonestNote>
+          This job has not updated in a while. If the tab that started it was closed, it stopped where it was and will not finish on its own — you can cancel it and start again.
+        </HonestNote>
+      )}
       {job.stages.length > 0 ? (
         <ul className="progress-list">
           {job.stages.map((s) => (
             <li key={s.id} className={s.status}>
               {s.status === "done" ? <CheckCircle2 size={16} /> : s.status === "running" ? <Loader2 size={16} className="spin" /> : <CircleDashed size={16} />}
               <span>{s.label}</span>
-              <span className="bn bilingual" style={{ marginLeft: "auto" }}>{s.labelBn}</span>
+              <span className="bn bilingual" lang="bn" style={{ marginLeft: "auto" }}>{s.labelBn}</span>
             </li>
           ))}
         </ul>
@@ -353,103 +605,153 @@ function JobProgress({ job, style }: { job: JobState; style?: React.CSSPropertie
       {job.status === "completed" && job.result && (
         <p style={{ marginTop: 12 }}>
           <strong>{job.result.name}</strong> · {job.result.wordCount} words · {job.result.rulesCount} grammar rules ·{" "}
-          {job.result.generatedDrafts} generated drafts are waiting in your dictionary for review.
+          {job.result.generatedDrafts} generated drafts are waiting in your dictionary for review.{" "}
+          <Link to={`/app/dictionary?status=draft`}>Review {job.result.generatedDrafts} drafts</Link>
         </p>
       )}
       {job.error && <ErrorNote message={job.error} />}
+      {(live || onRetry) && (
+        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+          {live && onCancel && (
+            <Button variant="outline" size="sm" onClick={onCancel}>Cancel generation</Button>
+          )}
+          {!live && onRetry && job.status !== "completed" && (
+            <Button variant="outline" size="sm" onClick={onRetry}>Try again</Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-/* -------------------------------- grammar review ------------------------------ */
+/* -------------------------------- version compare ----------------------------- */
 
-function GrammarReview({ grammar }: { grammar: GrammarData }) {
-  const [openId, setOpenId] = useState<string | null>(grammar.rules[0]?.id ?? null);
+function CompareModal({
+  workspaceId,
+  versions,
+  initialA,
+  initialB,
+  onClose,
+}: {
+  workspaceId: string;
+  versions: Array<{ version: number; change_summary: string; created_at: string }>;
+  initialA: number;
+  initialB: number;
+  onClose: () => void;
+}) {
+  const [a, setA] = useState(initialA);
+  const [b, setB] = useState(initialB);
+  const [data, setData] = useState<VersionCompare | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const sorted = [...versions].sort((x, y) => x.version - y.version);
+
+  useEffect(() => {
+    let alive = true;
+    setData(null);
+    setError(null);
+    api
+      .get<VersionCompare>(`/api/ws/${workspaceId}/language/versions/compare?a=${a}&b=${b}`)
+      .then((d) => {
+        if (alive) setData(d);
+      })
+      .catch((err) => {
+        if (alive) setError(describeApiError(err, "Compare failed"));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [a, b, workspaceId]);
+
+  const cap = (list: unknown[], slice: number): string =>
+    list.length > slice ? ` (+${list.length - slice} more)` : "";
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
-      <div className="card-title">
-        <h3>Grammar & sound rules</h3>
-        <span className="bilingual">Review everything, you can regenerate any time.</span>
+    <Modal title="Compare versions" onClose={onClose}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+        <Field label="From">
+          <Select value={String(a)} onChange={(v) => setA(Number(v))} aria-label="From version">
+            {sorted.map((v) => (
+              <option key={v.version} value={v.version}>v{v.version}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="To">
+          <Select value={String(b)} onChange={(v) => setB(Number(v))} aria-label="To version">
+            {sorted.map((v) => (
+              <option key={v.version} value={v.version}>v{v.version}</option>
+            ))}
+          </Select>
+        </Field>
       </div>
-
-      <div className="grid-2" style={{ marginBottom: 16 }}>
+      <ErrorNote message={error} />
+      {data && (
         <div>
-          <h4>Writing system</h4>
-          <p className="bilingual" style={{ marginBottom: 6 }}>{grammar.writingSystem.type}</p>
-          <div className="chips" style={{ marginBottom: 8 }}>
-            {grammar.writingSystem.alphabet.map((a) => (
-              <span key={a} className="chip mono">{a}</span>
-            ))}
-          </div>
-          <p className="bilingual">{grammar.writingSystem.capitalization}</p>
-        </div>
-        <div>
-          <h4>Phonology</h4>
-          <p className="bilingual" style={{ marginBottom: 4 }}>
-            Consonants: {grammar.phonology.consonants.join(", ")}
+          <p style={{ marginTop: 0 }}>
+            <strong>v{data.from.version} → v{data.to.version}</strong> · <span className="bilingual">{data.diff.summary}</span>
           </p>
-          <p className="bilingual" style={{ marginBottom: 4 }}>
-            Vowels: {grammar.phonology.vowels.join(", ")}
-          </p>
-          <p className="bilingual" style={{ marginBottom: 4 }}>
-            Syllables: {grammar.phonology.syllableStructures.join(", ")}
-          </p>
-          <p className="bilingual">{grammar.phonology.stressRule}</p>
-        </div>
-      </div>
-
-      {(grammar.wordFormation.prefixes.length > 0 || grammar.wordFormation.suffixes.length > 0) && (
-        <div style={{ marginBottom: 16 }}>
-          <h4>Word formation</h4>
-          <div className="chips">
-            {grammar.wordFormation.prefixes.map((p) => (
-              <span key={"p" + p.affix} className="chip">{p.affix}- = {p.meaning}</span>
-            ))}
-            {grammar.wordFormation.suffixes.map((s) => (
-              <span key={"s" + s.affix} className="chip">-{s.affix} = {s.meaning}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <h4>Rules ({grammar.rules.length})</h4>
-      {grammar.rules.map((rule) => (
-        <div className="accordion" key={rule.id}>
-          <button className="accordion-head" onClick={() => setOpenId(openId === rule.id ? null : rule.id)} aria-expanded={openId === rule.id}>
-            <span>
-              {rule.name} <span className="bilingual">· {rule.category}</span>
-            </span>
-            <span className="bilingual">{openId === rule.id ? "−" : "+"}</span>
-          </button>
-          {openId === rule.id && (
-            <div className="accordion-body">
-              <p style={{ marginTop: 10 }}>{rule.explanationEnglish}</p>
-              <p className="bn bilingual">{rule.explanationBengali}</p>
-              {rule.pattern && (
-                <p>
-                  Pattern: <code>{rule.pattern}</code>
-                </p>
-              )}
-              {rule.validExamples.length > 0 && (
-                <p>
-                  {rule.validExamples.map((v) => (
-                    <span key={v} style={{ display: "inline-block", marginRight: 10 }}>
-                      <code>{v}</code>
-                    </span>
-                  ))}
-                </p>
-              )}
-              {rule.invalidExamples.map((iv) => (
-                <p key={iv.example} style={{ color: "var(--danger)", fontSize: 13 }}>
-                  ✗ {iv.example}: {iv.why}
-                </p>
+          {data.diff.nameChanged && (
+            <p className="bilingual">Name: {data.diff.fromName} → <strong>{data.diff.toName}</strong></p>
+          )}
+          {data.diff.wordOrderChanged && (
+            <p className="bilingual">Word order: {data.diff.fromWordOrder} → <strong>{data.diff.toWordOrder}</strong></p>
+          )}
+          {data.diff.rulesAdded.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <h4 style={{ margin: "10px 0 4px" }}>Rules added</h4>
+              {data.diff.rulesAdded.slice(0, 20).map((r) => (
+                <p key={r.id} style={{ margin: "2px 0", fontSize: 13 }}>+ {r.name} <span className="bilingual" style={{ color: "var(--text-muted)" }}>· {r.category}</span></p>
+              ))}
+              <span className="bilingual" style={{ fontSize: 12, color: "var(--text-muted)" }}>{cap(data.diff.rulesAdded, 20)}</span>
+            </div>
+          )}
+          {data.diff.rulesRemoved.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <h4 style={{ margin: "10px 0 4px" }}>Rules removed</h4>
+              {data.diff.rulesRemoved.slice(0, 20).map((r) => (
+                <p key={r.id} style={{ margin: "2px 0", fontSize: 13 }}>− {r.name} <span className="bilingual" style={{ color: "var(--text-muted)" }}>· {r.category}</span></p>
+              ))}
+              <span className="bilingual" style={{ fontSize: 12, color: "var(--text-muted)" }}>{cap(data.diff.rulesRemoved, 20)}</span>
+            </div>
+          )}
+          {data.diff.rulesChanged.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <h4 style={{ margin: "10px 0 4px" }}>Rules updated</h4>
+              {data.diff.rulesChanged.slice(0, 20).map((r) => (
+                <p key={r.after.id} style={{ margin: "2px 0", fontSize: 13 }}>~ {r.after.name}</p>
+              ))}
+              <span className="bilingual" style={{ fontSize: 12, color: "var(--text-muted)" }}>{cap(data.diff.rulesChanged, 20)}</span>
+            </div>
+          )}
+          {(data.diff.vocabAdded.length > 0 || data.diff.vocabRemoved.length > 0) && (
+            <div style={{ marginBottom: 8 }}>
+              <h4 style={{ margin: "10px 0 4px" }}>Vocabulary</h4>
+              {data.diff.vocabAdded.slice(0, 20).map((v) => (
+                <span key={"add" + v.word} className="chip" style={{ marginRight: 6 }}>+ {v.word}</span>
+              ))}
+              {data.diff.vocabRemoved.slice(0, 20).map((v) => (
+                <span key={"rem" + v.word} className="chip" style={{ marginRight: 6, textDecoration: "line-through" }}>− {v.word}</span>
+              ))}
+              <span className="bilingual" style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginTop: 4 }}>
+                {cap(data.diff.vocabAdded, 20)}{cap(data.diff.vocabRemoved, 20)}
+              </span>
+            </div>
+          )}
+          {(data.diff.newWarnings.length > 0 || data.diff.resolvedWarnings.length > 0) && (
+            <div>
+              <h4 style={{ margin: "10px 0 4px" }}>Consistency notes</h4>
+              {data.diff.newWarnings.slice(0, 10).map((w, i) => (
+                <p key={"nw" + i} style={{ margin: "2px 0", fontSize: 13 }}>+ {w}</p>
+              ))}
+              {data.diff.resolvedWarnings.slice(0, 10).map((w, i) => (
+                <p key={"rw" + i} style={{ margin: "2px 0", fontSize: 13, color: "var(--text-muted)" }}>− {w}</p>
               ))}
             </div>
           )}
         </div>
-      ))}
-    </div>
+      )}
+      {!data && !error && <p className="bilingual">Comparing…</p>}
+    </Modal>
   );
 }
 
@@ -467,7 +769,7 @@ function RestoreButton({ workspaceId, version, onDone }: { workspaceId: string; 
       setConfirm(false);
       await onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Restore failed");
+      toast.error(describeApiError(err, "Restore failed"));
     } finally {
       setBusy(false);
     }
@@ -505,7 +807,7 @@ function RenameDialog({ workspaceId, current, onClose, onRenamed }: { workspaceI
       await api.patch(`/api/ws/${workspaceId}/language`, { name });
       await onRenamed(name);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Rename failed");
+      setError(describeApiError(err, "Rename failed"));
     } finally {
       setBusy(false);
     }

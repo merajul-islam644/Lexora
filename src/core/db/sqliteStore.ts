@@ -33,6 +33,10 @@ export function sqliteStore(db: Db): DataStore {
         where.push("source = ?");
         params.push(opts.source);
       }
+      if (opts.status) {
+        where.push("status = ?");
+        params.push(opts.status);
+      }
       const orderBy =
         opts.sort === "newest" ? "created_at DESC"
         : opts.sort === "updated" ? "updated_at DESC"
@@ -132,6 +136,9 @@ export function sqliteStore(db: Db): DataStore {
     },
 
     async deleteWorkspace(id) {
+      // Audit tombstones outlive the workspace: detach the log rows first so
+      // the FK cascade cannot destroy the record of what happened here.
+      db.prepare("UPDATE activity_log SET workspace_id = NULL WHERE workspace_id = ?").run(id);
       db.prepare("DELETE FROM workspaces WHERE id = ?").run(id);
     },
 
@@ -240,6 +247,18 @@ export function sqliteStore(db: Db): DataStore {
       return (db.prepare("SELECT COUNT(*) AS c FROM generation_jobs WHERE workspace_id = ?").get(workspaceId) as unknown as { c: number }).c;
     },
 
+    async listJobs(workspaceId) {
+      return db
+        .prepare("SELECT * FROM generation_jobs WHERE workspace_id = ? ORDER BY created_at ASC")
+        .all(workspaceId) as unknown as JobRow[];
+    },
+
+    async getLatestJob(workspaceId) {
+      return db
+        .prepare("SELECT id, created_at FROM generation_jobs WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 1")
+        .get(workspaceId) as unknown as { id: string; created_at: string } | undefined;
+    },
+
     async insertJob(row) {
       db.prepare(
         "INSERT INTO generation_jobs (id, workspace_id, user_id, status, stages_json, result_json, error, style, reference_langs, preferred_name, created_at, updated_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -277,6 +296,14 @@ export function sqliteStore(db: Db): DataStore {
       return (db.prepare(sql).get(...(action ? [workspaceId, action] : [workspaceId])) as unknown as { c: number }).c;
     },
 
+    async listDetachedActivity(): Promise<ActivityRow[]> {
+      return db
+        .prepare(
+          "SELECT id, workspace_id, actor_user_id, action, resource_type, resource_id, metadata_json, created_at FROM activity_log WHERE workspace_id IS NULL ORDER BY created_at DESC",
+        )
+        .all() as unknown as ActivityRow[];
+    },
+
     /* -------------------------------- phrasebook ----------------------------- */
 
     async listPhrasebook(workspaceId, limit) {
@@ -293,6 +320,10 @@ export function sqliteStore(db: Db): DataStore {
 
     async deletePhrasebook(id, workspaceId) {
       db.prepare("DELETE FROM phrasebook WHERE id = ? AND workspace_id = ?").run(id, workspaceId);
+    },
+
+    async updatePhrasebook(id, workspaceId, note) {
+      db.prepare("UPDATE phrasebook SET note = ? WHERE id = ? AND workspace_id = ?").run(note, id, workspaceId);
     },
 
     /* ---------------------------- learning progress -------------------------- */

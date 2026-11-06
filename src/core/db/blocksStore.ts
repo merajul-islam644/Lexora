@@ -3,7 +3,7 @@ import { uid } from "./ids.js";
 import { getBlocksClient } from "../services/blocksClient.js";
 import type { BlocksClient } from "@seliseblocks/client";
 import type {
-  ActivityListResult, DataStore, EntryListOpts, EntryListResult, MembershipRow,
+  ActivityListResult, ActivityRow, DataStore, EntryListOpts, EntryListResult, MembershipRow,
   PhraseRow, ProgressRow, VersionRow, WorkspaceCoreRow, WorkspaceSummaryRow
 } from "./store.js";
 
@@ -241,6 +241,7 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
       if (opts.pos) rows = rows.filter((r) => r.part_of_speech === opts.pos);
       if (opts.learning) rows = rows.filter((r) => r.learning_status === opts.learning);
       if (opts.source) rows = rows.filter((r) => r.source === opts.source);
+      if (opts.status) rows = rows.filter((r) => r.status === opts.status);
       rows.sort((a, b) => {
         if (opts.sort === "newest") return b.created_at.localeCompare(a.created_at);
         if (opts.sort === "updated") return b.updated_at.localeCompare(a.updated_at);
@@ -356,11 +357,14 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
       // Replicate the SQL FK cascades. language rows keep their entries' languageId
       // dangling after a workspace delete, same as the SQL "ON DELETE CASCADE"
       // leaves nothing behind -- children go first, then the workspace.
+      // ActivityLog deliberately survives the delete: audit tombstones outlive
+      // the workspace they describe (spec §15). Orphaned rows keep their
+      // workspaceId for post-mortem review and are never listed in the app
+      // again (activity queries always filter by a live workspace).
       for (const [schema, field] of [
         ["WorkspaceMembership", "workspaceId"],
         ["LanguageVersion", "workspaceId"],
         ["LearningProgress", "workspaceId"],
-        ["ActivityLog", "workspaceId"],
         ["Phrasebook", "workspaceId"],
         ["GenerationJob", "workspaceId"],
         ["DictionaryEntry", "workspaceId"],
@@ -532,6 +536,18 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
       return recs.length;
     },
 
+    async listJobs(workspaceId) {
+      const recs = await listAll_("GenerationJob", [...JOB_FIELDS, ...SYSTEM], { workspaceId });
+      return recs.map(recordToJob).sort((a, b) => a.created_at.localeCompare(b.created_at));
+    },
+
+    async getLatestJob(workspaceId) {
+      const recs = await listAll_("GenerationJob", ["ItemId", "CreatedDate"], { workspaceId });
+      const latest = recs
+        .sort((a, b) => String(b.CreatedDate ?? "").localeCompare(String(a.CreatedDate ?? "")))[0];
+      return latest ? { id: latest.ItemId as string, created_at: String(latest.CreatedDate ?? "") } : undefined;
+    },
+
     async insertJob(row) {
       await insertRec_("GenerationJob", jobToRecord(row, true));
     },
@@ -578,6 +594,28 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
       return action ? recs.filter((r) => r.action === action).length : recs.length;
     },
 
+    async listDetachedActivity(): Promise<ActivityRow[]> {
+      // Tombstones keep their workspaceId after the workspace is deleted, so
+      // "detached" means: the referenced workspace no longer exists. Post-
+      // mortem tooling only -- never surfaced in the app.
+      const recs = await listAll_("ActivityLog", [...ACTIVITY_FIELDS, ...SYSTEM], {});
+      const workspaces = await listAll_("Workspace", ["ItemId"], {});
+      const live = new Set(workspaces.map((w) => w.ItemId as string));
+      return recs
+        .filter((rec) => !live.has(rec.workspaceId as string))
+        .map((rec) => ({
+          id: rec.ItemId as string,
+          workspace_id: rec.workspaceId as string,
+          actor_user_id: (rec.actorUserId as string) ?? null,
+          action: rec.action as string,
+          resource_type: rec.resourceType as string,
+          resource_id: rec.resourceId as string,
+          metadata_json: rec.metadataJson as string,
+          created_at: (rec.CreatedDate as string) ?? ""
+        }))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    },
+
     /* -------------------------------- phrasebook ----------------------------- */
 
     async listPhrasebook(workspaceId, limit) {
@@ -611,6 +649,13 @@ export function blocksStore(getClient: () => BlocksClient = getBlocksClient): Da
 
     async deletePhrasebook(id, workspaceId) {
       await deleteWhere_("Phrasebook", { workspaceId, ItemId: id });
+    },
+
+    async updatePhrasebook(id, workspaceId, note) {
+      // Scoped like the delete: only a phrase inside this workspace moves.
+      const recs = await listAll_("Phrasebook", ["ItemId"], { workspaceId, ItemId: id });
+      if (recs.length === 0) return;
+      await updateRec_("Phrasebook", id, { note });
     },
 
     /* ---------------------------- learning progress -------------------------- */

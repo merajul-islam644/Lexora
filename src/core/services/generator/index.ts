@@ -151,12 +151,18 @@ export class GenerationEngine {
         syllables: [ctx.input.preferredName!.trim()]
       };
     }
-    for (let i = 0; i < 30 && !ctx.chosen; i++) {
-      const candidate = generateNameCandidate(this.ctx.rng, this.ctx.phon, takenNames);
-      if (candidate) {
+    // Spec §16: the profile reports the runner-up names the engine
+    // considered, so generate the full candidate slate and pick the first
+    // solid (4+ letter) one as the name -- the rest become nameCandidates.
+    if (!ctx.chosen) {
+      let first: NameCandidate | null = null;
+      for (let i = 0; i < 30; i++) {
+        const candidate = generateNameCandidate(this.ctx.rng, this.ctx.phon, takenNames);
+        if (!candidate) continue;
         ctx.nameCandidates.push(candidate);
-        if (candidate.name.length >= 4) ctx.chosen = candidate;
+        if (!first && candidate.name.length >= 4) first = candidate;
       }
+      if (first) ctx.chosen = first;
     }
   }
 
@@ -288,14 +294,22 @@ export class GenerationEngine {
       }
     }
 
-    // 2. words that ignore the sound inventory
+    // 2. words that ignore the sound inventory. A regeneration keeps the
+    // previous version's words while drawing a fresh inventory, so this can
+    // legitimately flag dozens of kept words; list the first ten and
+    // summarize the rest so the report stays readable.
     const allowed = new Set<string>([...ctx.phon.consonants, ...ctx.phon.vowels]);
+    const foreign: Array<{ word: string; sounds: string[] }> = [];
     for (const item of ctx.vocab) {
       const chunks = splitChunks(item.word.toLowerCase());
-      const foreign = chunks.filter((c) => !allowed.has(c));
-      if (foreign.length > 0) {
-        ctx.warnings.push(`"${item.word}" uses sound(s) ${foreign.join(", ")} outside the language inventory — kept as provided, consider revising.`);
-      }
+      const bad = chunks.filter((c) => !allowed.has(c));
+      if (bad.length > 0) foreign.push({ word: item.word, sounds: bad });
+    }
+    for (const f of foreign.slice(0, 10)) {
+      ctx.warnings.push(`"${f.word}" uses sound(s) ${f.sounds.join(", ")} outside the language inventory — kept as provided, consider revising.`);
+    }
+    if (foreign.length > 10) {
+      ctx.warnings.push(`${foreign.length - 10} more words also use sounds outside the inventory; they stay in the dictionary as provided.`);
     }
 
     // 3. grammar sanity: exactly one word order rule, examples reference known words
@@ -317,6 +331,16 @@ export class GenerationEngine {
     if (ctx.warnings.length === 0) {
       ctx.warnings.push("No consistency problems found.");
     }
+
+    // Final guard: the profile schema caps consistencyWarnings at 40. Keep
+    // the most useful head and summarize the remainder instead of failing
+    // the whole save on a noisy regeneration.
+    if (ctx.warnings.length > 40) {
+      const dropped = ctx.warnings.length - 39;
+      ctx.warnings = ctx.warnings
+        .slice(0, 39)
+        .concat(`${dropped} further consistency notes were summarized to keep this report readable.`);
+    }
   }
 
   buildProfile(): LanguageProfile {
@@ -329,6 +353,12 @@ export class GenerationEngine {
     const profile = {
       name: chosen.name,
       nativeName: chosen.nativeName,
+      // The runner-up names from the sound-rules stage (spec §16: candidates
+      // are part of the output; the UI shows them as "names considered").
+      nameCandidates: ctx.nameCandidates
+        .filter((c) => c.name !== chosen.name)
+        .slice(0, 30)
+        .map((c) => ({ name: c.name, nativeName: c.nativeName })),
       description,
       writingSystem: {
         type: "Latin alphabet (romanized)",

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { makeTestEnv, createWorkspace, addEntry, type TestEnv } from "../helpers.js";
 import { applyReview, getPracticeQueue, getPracticeStats } from "../../src/core/services/practice.js";
+import { uid, nowIso } from "../../src/core/db/ids.js";
 
 let env: TestEnv;
 let user: string;
@@ -96,5 +97,88 @@ describe("spaced repetition math (SM-2 inspired)", () => {
     await expect(
       applyReview(env.store, { workspaceId, userId: user, entryId: "no-such-entry", mode: "fill_blank", correct: true })
     ).rejects.toThrowError();
+  });
+});
+
+describe("queue enrichment for the practice modes", () => {
+  let ws2: string;
+  let sentenceEntryId: string;
+
+  beforeAll(async () => {
+    ws2 = await createWorkspace(env, "enrich@test.dev", "Enrich");
+    await addEntry(env, ws2, "vethra", "চুক্তি", "agreement");
+    await addEntry(env, ws2, "solven", "গোপনীয়", "confidential");
+    await addEntry(env, ws2, "kairum", "অনুমোদন", "approval");
+    // One entry carries a stored example sentence that uses its own word.
+    sentenceEntryId = uid();
+    const now = nowIso();
+    await env.store.insertEntry({
+      id: sentenceEntryId,
+      workspace_id: ws2,
+      language_id: null,
+      word: "malvun",
+      normalized_word: "malvun",
+      bengali_meaning: "চালান",
+      english_meaning: "shipment",
+      pronunciation_guide: "mal-vun",
+      ipa: "",
+      part_of_speech: "noun",
+      root: "",
+      word_formation_explanation: "",
+      prefixes: "",
+      suffixes: "",
+      grammar_notes: "",
+      example_sentences_json: JSON.stringify([
+        {
+          id: uid(),
+          constructed: "Bonivar malvun auroven purnaka.",
+          bengali: "গ্রাহকের চালান পৌঁছেছে।",
+          english: "The customer's shipment has arrived.",
+          gloss: [],
+          grammarNotes: "",
+          reviewStatus: "approved"
+        }
+      ]),
+      related_word_ids_json: "[]",
+      mnemonic: "",
+      learning_status: "new",
+      source: "user",
+      status: "approved",
+      archived: 0,
+      entry_version: 1,
+      history_json: "[]",
+      created_at: now,
+      updated_at: now
+    });
+  });
+
+  it("builds deterministic MCQ options with the answer shuffled in", async () => {
+    const mcq = await getPracticeQueue(env.store, ws2, "enrich@test.dev", "bengali_to_word", 10);
+    expect(mcq.length).toBe(4);
+    for (const item of mcq) {
+      expect(item.options).toBeTruthy();
+      expect(item.options).toContain(item.word);
+      expect(new Set(item.options).size).toBe(item.options!.length); // no duplicate options
+      expect(item.options!.length).toBe(4); // answer + 3 distinct distractors
+    }
+    const second = await getPracticeQueue(env.store, ws2, "enrich@test.dev", "bengali_to_word", 10);
+    expect(second.map((i) => i.options)).toEqual(mcq.map((i) => i.options));
+  });
+
+  it("blanks the target word inside its example sentence for fill_blank", async () => {
+    const queue = await getPracticeQueue(env.store, ws2, "enrich@test.dev", "fill_blank", 10);
+    const item = queue.find((i) => i.entryId === sentenceEntryId);
+    expect(item?.contextSentence).toBeTruthy();
+    expect(item?.contextSentence).not.toMatch(/malvun/i);
+    expect(item?.contextSentence).toContain("____");
+  });
+
+  it("leaves typed and self-report modes without options or context", async () => {
+    const typed = await getPracticeQueue(env.store, ws2, "enrich@test.dev", "word_to_bengali", 10);
+    expect(typed.length).toBe(4);
+    expect(typed.every((i) => i.options === undefined && i.contextSentence === undefined)).toBe(true);
+
+    const spoken = await getPracticeQueue(env.store, ws2, "enrich@test.dev", "pronunciation", 10);
+    expect(spoken.every((i) => i.options === undefined)).toBe(true);
   });
 });

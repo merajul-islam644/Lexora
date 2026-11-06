@@ -6,7 +6,6 @@ import type { DataStore } from "../db/store.js";
 import {
   toIpa,
   guideFromSyllables,
-  buildPhonology,
   generateWord,
   mulberry32,
   hashSeed,
@@ -28,8 +27,7 @@ export interface WordSuggestion {
   existingEntryId?: string;
 }
 
-function phonologyFromProfile(profile: LanguageProfile | null) {
-  if (!profile) return buildPhonology(mulberry32(1), "naturalistic");
+function phonologyFromProfile(profile: LanguageProfile) {
   return {
     consonants: profile.phonology.consonants,
     vowels: profile.phonology.vowels,
@@ -44,10 +42,9 @@ function phonologyFromProfile(profile: LanguageProfile | null) {
 }
 
 function derivationSuffixFor(
-  profile: LanguageProfile | null,
+  profile: LanguageProfile,
   pos: PartOfSpeech,
-): { suffix: string; label: string } | null {
-  if (!profile) return null;
+): { suffix: string; label: string; meaning: string } | null {
   const keyword =
     pos === "verb"
       ? "verb"
@@ -60,12 +57,15 @@ function derivationSuffixFor(
     s.meaning.toLowerCase().includes(keyword),
   );
   if (!hit) return null;
-  return { suffix: hit.affix.replace(/^-/, ""), label: hit.affix };
+  return { suffix: hit.affix.replace(/^-/, ""), label: hit.affix, meaning: hit.meaning };
 }
 
 /**
  * Word Builder: proposes a word that follows the language's established
  * phonology and derivation rules, checks collisions, and explains itself.
+ * Requires a generated language -- without its sound rules there is nothing
+ * consistent to coin from, so the route answers 400 `no_language` instead of
+ * silently using a throwaway phonology.
  */
 export async function suggestWord(
   store: DataStore,
@@ -73,9 +73,14 @@ export async function suggestWord(
   params: { concept: string; partOfSpeech: PartOfSpeech },
 ): Promise<WordSuggestion> {
   const language = await store.getLanguageByWorkspace(workspaceId);
-  const profile = language
-    ? (JSON.parse(language.profile_json) as LanguageProfile)
-    : null;
+  if (!language) {
+    throw new HttpError(
+      400,
+      "Generate your language first — the Word Builder coins words using your language's sound and derivation rules.",
+      "no_language",
+    );
+  }
+  const profile = JSON.parse(language.profile_json) as LanguageProfile;
   const entries = await store.findEntries(workspaceId);
 
   const conceptLower = params.concept.toLowerCase().trim();
@@ -126,23 +131,27 @@ export async function suggestWord(
 
   const donor = related.find((r) => r.root && r.root.length >= 3);
   const derivation = derivationSuffixFor(profile, params.partOfSpeech);
+  let ruleReference: string;
   if (donor && derivation) {
     root = donor.root;
     const candidate = root + derivation.suffix;
     if (!taken.has(candidate)) {
       word = candidate;
       formation = `root "${root}" (from “${donor.english_meaning || donor.bengali_meaning}”) + ${params.partOfSpeech} suffix ${derivation.label}, per the word-formation rule`;
+      ruleReference = `${derivation.label} (${derivation.meaning})`;
     } else {
       const fresh = generateWord(mulberry32(seed), phon, taken);
       word = fresh.word;
       root = fresh.word;
       formation = `fresh root following the language's syllable rules (${phon.syllableStructures.join(", ")})`;
+      ruleReference = `syllable rules: ${phon.syllableStructures.join(", ")}`;
     }
   } else {
     const fresh = generateWord(mulberry32(seed), phon, taken);
     word = fresh.word;
     root = fresh.word;
     formation = `fresh root following the language's syllable rules (${phon.syllableStructures.join(", ")})`;
+    ruleReference = `syllable rules: ${phon.syllableStructures.join(", ")}`;
   }
 
   const suggestion: WordSuggestion = {
@@ -159,7 +168,7 @@ export async function suggestWord(
       word: r.word,
       meaning: r.english_meaning || r.bengali_meaning,
     })),
-    ruleReference: "word_formation",
+    ruleReference,
   };
   return suggestion;
 }

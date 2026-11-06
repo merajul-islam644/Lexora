@@ -100,6 +100,17 @@ describe("generation engine", () => {
     expect(second.name.toLowerCase()).not.toBe(first.name.toLowerCase());
   });
 
+  it("reports the candidate names it considered (spec §16)", () => {
+    const profile = run(baseInput());
+    expect(profile.nameCandidates.length).toBeGreaterThan(0);
+    expect(profile.nameCandidates.length).toBeLessThanOrEqual(30);
+    // The chosen name is not listed among the runners-up.
+    expect(profile.nameCandidates.some((c) => c.name === profile.name)).toBe(false);
+    for (const candidate of profile.nameCandidates) {
+      expect(candidate.name.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
   it("uses the preferred name when it is free", () => {
     const profile = run(baseInput({ preferredName: "Zimta" }));
     expect(profile.name).toBe("Zimta");
@@ -145,4 +156,70 @@ describe("generation engine", () => {
     const parsed = languageProfileSchema.safeParse(profile);
     expect(parsed.success).toBe(true);
   });
+});
+
+describe("generation engine: regeneration keeps the schema contract", () => {
+  // Regression: a second generation inherits the first version's generated
+  // drafts as preserved entries built from a DIFFERENT sound inventory, so
+  // the consistency stage used to emit dozens of "outside the inventory"
+  // notes and blow past the profile schema's 40-warning cap — failing the
+  // whole save. Sweeping seed pairs keeps this effectively deterministic.
+  function draftsAsEntries(profile: ReturnType<typeof run>): EntryRow[] {
+    return profile.vocabulary
+      .filter((v) => v.source === "generated")
+      .map((v, i) =>
+        makeEntry({
+          id: `g${i}`,
+          word: v.word,
+          bengali_meaning: v.bengaliMeaning,
+          english_meaning: v.englishMeaning,
+          part_of_speech: v.partOfSpeech,
+        }),
+      );
+  }
+
+  it("regenerating over the previous version's drafts stays inside the warning cap", () => {
+    for (let pair = 0; pair < 150; pair++) {
+      const first = run(baseInput({ seed: 1000 + pair }));
+      const inherited = [
+        makeEntry({ id: "u1", word: "kaat", english_meaning: "test word", bengali_meaning: "পরীক্ষা" }),
+        makeEntry({ id: "u2", word: "venu", english_meaning: "test word", bengali_meaning: "পরীক্ষা" }),
+        ...draftsAsEntries(first),
+      ];
+      const second = run(
+        baseInput({
+          seed: 5000 + pair,
+          entries: inherited,
+          version: 2,
+          existingWords: new Set(inherited.map((e) => e.normalized_word)),
+        }),
+      );
+      const parsed = languageProfileSchema.safeParse(second);
+      if (!parsed.success) {
+        throw new Error(`seed pair ${pair} produced an invalid profile: ${JSON.stringify(parsed.error.issues.slice(0, 3))}`);
+      }
+      expect(second.consistencyWarnings.length).toBeLessThanOrEqual(40);
+    }
+  }, 120_000);
+
+  it("summarizes a shifted inventory instead of listing every kept word", () => {
+    // Force the foreign-sound path over the inherited drafts: the second
+    // profile must stay readable (bounded list + one summary line).
+    for (let pair = 0; pair < 100; pair++) {
+      const first = run(baseInput({ seed: 9000 + pair }));
+      const inherited = [
+        makeEntry({ id: "u1", word: "kaat", english_meaning: "test word", bengali_meaning: "পরীক্ষা" }),
+        ...draftsAsEntries(first),
+      ];
+      const second = run(
+        baseInput({ seed: 9500 + pair, entries: inherited, version: 2, existingWords: new Set(inherited.map((e) => e.normalized_word)) }),
+      );
+      const foreignNotes = second.consistencyWarnings.filter((w) => /outside the language inventory/.test(w));
+      const summary = second.consistencyWarnings.filter((w) => /more words also use sounds/.test(w));
+      // The per-word notes are capped at ten; the summary line only appears
+      // in the capped case, and never alongside a sub-cap list.
+      expect(foreignNotes.length).toBeLessThanOrEqual(10);
+      if (foreignNotes.length < 10) expect(summary.length).toBe(0);
+    }
+  }, 120_000);
 });

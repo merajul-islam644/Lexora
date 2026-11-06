@@ -15,6 +15,7 @@ import { Profile } from "./pages/Profile.js";
 import { Console } from "./pages/Console.js";
 import { Dashboard, Welcome } from "./pages/Dashboard.js";
 import { MyLanguage } from "./pages/MyLanguage.js";
+import { GrammarWorkspace } from "./pages/Grammar.js";
 import { DictionaryPage } from "./pages/Dictionary.js";
 import { TranslationLab, WordBuilder } from "./pages/Tools.js";
 import { Practice } from "./pages/Practice.js";
@@ -62,6 +63,7 @@ function AppRoutes() {
         <Route path="console" element={<Console />} />
         {wsRoute("dashboard", (ws) => <Dashboard key={ws.id} />)}
         {wsRoute("language", (ws) => <MyLanguage key={ws.id} workspace={ws} />)}
+        {wsRoute("grammar", (ws) => <GrammarWorkspace key={ws.id} workspace={ws} />)}
         {wsRoute("dictionary", (ws) => <DictionaryPage key={ws.id} workspace={ws} />)}
         {wsRoute("word-builder", (ws) => <WordBuilder key={ws.id} workspace={ws} />)}
         {wsRoute("translate", (ws) => <TranslationLab key={ws.id} workspace={ws} />)}

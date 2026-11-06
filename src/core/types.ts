@@ -39,6 +39,7 @@ export const PERMISSIONS = {
   "dictionary:export": "viewer",
   "language:generate": "editor",
   "language:rename": "editor",
+  "language:edit": "editor",
   "language:restore": "admin",
   "members:manage": "admin",
   "workspace:delete": "owner",
