@@ -999,8 +999,22 @@ function InviteSection() {
         organizationId: orgId,
       });
       const orgName = organizations.find((o) => o.id === orgId)?.name ?? orgId;
-      toast.success(`${email.trim()} invited to ${orgName}.`);
-      setInvited((prev) => [{ email: email.trim(), org: orgName }, ...prev]);
+      // users.create is silent -- no email goes out with it -- so ask IAM to
+      // send the account-activation mail itself; it fills the activation link
+      // into the template, and the app never touches activation tokens.
+      // Best-effort: the directory entry stands even if the mail fails.
+      let mailed = true;
+      try {
+        await blocksClient.auth.resendActivation({ email: email.trim() });
+      } catch {
+        mailed = false;
+      }
+      if (mailed) {
+        toast.success(`${email.trim()} invited to ${orgName} -- activation email sent.`);
+      } else {
+        toast.warning(`${email.trim()} was added to ${orgName}, but the activation email failed. Send the invite again to retry.`);
+      }
+      setInvited((prev) => [{ email: email.trim(), org: mailed ? orgName : `${orgName} (email failed)` }, ...prev]);
       setConfirming(false);
       setEmail("");
       setFirstName("");
@@ -1108,7 +1122,7 @@ function InviteSection() {
       {confirming && (
         <ConfirmDialog
           title={`Invite ${email.trim()}?`}
-          body={`Creates the account in "${organizations.find((o) => o.id === orgId)?.name ?? orgId}"${roleSlugs.length > 0 ? ` with roles: ${roleSlugs.map(roleName).join(", ")}` : " with the directory's default roles"}.`}
+          body={`Creates the account in "${organizations.find((o) => o.id === orgId)?.name ?? orgId}"${roleSlugs.length > 0 ? ` with roles: ${roleSlugs.map(roleName).join(", ")}` : " with the directory's default roles"} and emails ${email.trim()} an activation link.`}
           confirmLabel="Send invite"
           onConfirm={invite}
           onCancel={() => setConfirming(false)}
