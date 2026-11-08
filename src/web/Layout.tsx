@@ -35,6 +35,8 @@ import { saveTheme, THEME_EVENT, type Theme } from "./theme.js";
 import { useBlocksAuth } from "./blocks-auth.js";
 import { api } from "./api.js";
 import { LoadingScreen } from "./ui.js";
+import { t } from "./i18n/index.js";
+import { LanguageSwitcher } from "./i18n/LanguageSwitcher.js";
 
 export function BrandMark({ light }: { light?: boolean }) {
   return (
@@ -68,7 +70,7 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
   return (
     <div>
       <a href="#main-content" className="skip-link">
-        Skip to main content
+        {t("common.skip_to_content")}
       </a>
       <header className="public-header">
         <Link to="/" style={{ textDecoration: "none" }}>
@@ -76,25 +78,25 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
         </Link>
         <nav>
           <Link to="/features" className="hide-sm">
-            Features
+            {t("landing.nav.features")}
           </Link>
           <Link to="/security" className="hide-sm">
-            Security
+            {t("landing.nav.security")}
           </Link>
-          <Link to="/login">Sign in</Link>
+          <Link to="/login">{t("landing.nav.sign_in")}</Link>
           <Link
             to="/signup"
             className="btn btn-primary btn-sm"
             style={{ textDecoration: "none" }}
           >
-            Get started
+            {t("landing.nav.get_started")}
           </Link>
+          <LanguageSwitcher />
         </nav>
       </header>
       <main id="main-content">{children ?? <Outlet />}</main>
       <footer className="public-footer">
-        Lexora: your business's own private language. A constructed language is
-        a communication tool, not encryption.
+        {t("landing.footer.tagline")}
       </footer>
     </div>
   );
@@ -103,17 +105,17 @@ export function PublicLayout({ children }: { children?: React.ReactNode }) {
 /* ---------------------------------- app shell -------------------------------- */
 
 const NAV = [
-  { to: "/app/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/app/language", label: "My Language", icon: Sparkles },
-  { to: "/app/grammar", label: "Grammar", icon: ScrollText },
-  { to: "/app/dictionary", label: "Dictionary", icon: BookOpen },
-  { to: "/app/word-builder", label: "Word Builder", icon: BookMarked },
-  { to: "/app/translate", label: "Translation Lab", icon: Languages },
-  { to: "/app/practice", label: "Practice & Revision", icon: RefreshCw },
-  { to: "/app/security", label: "Security & Access", icon: Shield },
-  { to: "/app/console", label: "IAM Console", icon: Building2 },
-  { to: "/app/activity", label: "Activity Log", icon: Activity },
-  { to: "/app/settings", label: "Settings", icon: Settings },
+  { to: "/app/dashboard", label: "app.nav.dashboard", icon: LayoutDashboard },
+  { to: "/app/language", label: "app.nav.my_language", icon: Sparkles },
+  { to: "/app/grammar", label: "app.nav.grammar", icon: ScrollText },
+  { to: "/app/dictionary", label: "app.nav.dictionary", icon: BookOpen },
+  { to: "/app/word-builder", label: "app.nav.word_builder", icon: BookMarked },
+  { to: "/app/translate", label: "app.nav.translation_lab", icon: Languages },
+  { to: "/app/practice", label: "app.nav.practice", icon: RefreshCw },
+  { to: "/app/security", label: "app.nav.security_access", icon: Shield },
+  { to: "/app/console", label: "app.nav.iam_console", icon: Building2 },
+  { to: "/app/activity", label: "app.nav.activity_log", icon: Activity },
+  { to: "/app/settings", label: "app.nav.settings", icon: Settings },
 ];
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -203,7 +205,7 @@ export function AppShell() {
   const logout = async () => {
     await blocks.logout();
     await refresh();
-    toast("Signed out.");
+    toast(t("app.toast.signed_out"));
     navigate("/login");
   };
 
@@ -229,14 +231,14 @@ export function AppShell() {
   return (
     <div className="shell">
       <a href="#main-content" className="skip-link">
-        Skip to main content
+        {t("common.skip_to_content")}
       </a>
       {drawerOpen && (
         <div className="scrim" onClick={() => setDrawerOpen(false)} />
       )}
       <aside
         className={`sidebar ${drawerOpen ? "open" : ""} ${collapsed ? "collapsed" : ""}`}
-        aria-label="Main navigation"
+        aria-label={t("app.nav.main_navigation")}
       >
         <div className="sidebar-brand">
           <BrandMark />
@@ -244,8 +246,8 @@ export function AppShell() {
             className="btn btn-ghost btn-icon"
             style={{ marginLeft: "auto", color: "var(--text)" }}
             onClick={toggleSidebar}
-            aria-label={collapsed ? "Expand sidebar" : "Minimize sidebar"}
-            title={collapsed ? "Expand sidebar" : "Minimize sidebar"}
+            aria-label={collapsed ? t("app.sidebar.expand") : t("app.sidebar.minimize")}
+            title={collapsed ? t("app.sidebar.expand") : t("app.sidebar.minimize")}
           >
             {collapsed ? (
               <ChevronsRight size={18} />
@@ -260,9 +262,9 @@ export function AppShell() {
               key={to}
               to={to}
               className={({ isActive }) => (isActive ? "active" : "")}
-              title={label}
+              title={t(label)}
             >
-              <Icon size={17} /> <span className="nav-label">{label}</span>
+              <Icon size={17} /> <span className="nav-label">{t(label)}</span>
             </NavLink>
           ))}
         </nav>
@@ -272,13 +274,13 @@ export function AppShell() {
             className={wsOpen ? "ws-switch open" : "ws-switch"}
             aria-haspopup="menu"
             aria-expanded={wsOpen}
-            aria-label="Switch workspace"
+            aria-label={t("app.ws.switch")}
             onClick={() => setWsOpen((v) => !v)}
           >
             <span className="ws-switch-info">
               <span className="ws-name">{active.name}</span>
               <span className="ws-meta">
-                {active.role} · {active.wordCount} words
+                {t("app.ws.meta", { role: active.role, count: active.wordCount })}
               </span>
             </span>
             <ChevronDown size={14} />
@@ -287,7 +289,7 @@ export function AppShell() {
             <div
               className="menu sidebar-ws-menu"
               role="menu"
-              aria-label="Workspaces"
+              aria-label={t("app.ws.workspaces")}
             >
               {workspaces.map((w) => {
                 const orgName = organizations.find((o) => o.id === w.organizationId)?.name;
@@ -305,8 +307,7 @@ export function AppShell() {
                     <span className="ws-item">
                       <span className="ws-item-name">{w.name}</span>
                       <span className="ws-item-meta">
-                        {orgName ? `${orgName} · ` : ""}
-                        {w.role} · {w.wordCount} words
+                        {orgName ? t("app.ws.org_meta", { org: orgName, role: w.role, count: w.wordCount }) : t("app.ws.meta", { role: w.role, count: w.wordCount })}
                       </span>
                     </span>
                     {w.id === active.id && <Check size={15} />}
@@ -323,7 +324,7 @@ export function AppShell() {
           <button
             className="btn btn-outline btn-icon menu-btn"
             onClick={() => setDrawerOpen(true)}
-            aria-label="Open menu"
+            aria-label={t("app.menu.open")}
           >
             <Menu size={18} />
           </button>
@@ -341,22 +342,23 @@ export function AppShell() {
               onClick={toggleTheme}
               aria-label={
                 theme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
+                  ? t("app.theme.to_light")
+                  : t("app.theme.to_dark")
               }
               title={
                 theme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
+                  ? t("app.theme.to_light")
+                  : t("app.theme.to_dark")
               }
             >
               {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
             </button>
+            <LanguageSwitcher />
             <div className="avatar-menu" ref={menuRef}>
               <button
                 type="button"
                 className="avatar-btn"
-                aria-label="Account menu"
+                aria-label={t("app.menu.account")}
                 aria-expanded={menuOpen}
                 onClick={() => setMenuOpen((v) => !v)}
               >
@@ -380,7 +382,7 @@ export function AppShell() {
                       navigate("/app/profile");
                     }}
                   >
-                    <User size={15} /> Profile
+                    <User size={15} /> {t("app.menu.profile")}
                   </button>
                   <button
                     type="button"
@@ -390,7 +392,7 @@ export function AppShell() {
                       void logout();
                     }}
                   >
-                    <LogOut size={15} /> Logout
+                    <LogOut size={15} /> {t("app.menu.logout")}
                   </button>
                 </div>
               )}

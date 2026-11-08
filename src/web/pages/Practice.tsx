@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, PRACTICE_MODES } from "../api.js";
 import { describeApiError } from "../errors.js";
 import { Badge, Button, EmptyState, ErrorNote, LoadingScreen, PageHeader, Stat, StatusBadge } from "../ui.js";
+import { t } from "../i18n/index.js";
 
 type Workspace = { id: string; name: string; role: string };
 
@@ -31,15 +32,18 @@ interface Stats {
 }
 
 const MODE_LABELS: Record<string, string> = {
-  mixed: "Mixed (all modes)",
-  word_to_bengali: "Word → Bengali",
-  word_to_english: "Word → English",
-  bengali_to_word: "Bengali → Word",
-  english_to_word: "English → Word",
-  fill_blank: "Fill the blank",
-  choose_word: "Choose the word",
-  pronunciation: "Pronunciation"
+  mixed: "practice.mode.mixed",
+  word_to_bengali: "practice.mode.word_to_bengali",
+  word_to_english: "practice.mode.word_to_english",
+  bengali_to_word: "practice.mode.bengali_to_word",
+  english_to_word: "practice.mode.english_to_word",
+  fill_blank: "practice.mode.fill_blank",
+  choose_word: "practice.mode.choose_word",
+  pronunciation: "practice.mode.pronunciation"
 };
+
+const modeLabel = (mode: string): string =>
+  MODE_LABELS[mode] ? t(MODE_LABELS[mode]) : mode;
 
 function normalizeAnswer(text: string): string {
   return text.trim().toLowerCase().replace(/[.!?।,]+\s*$/g, "").replace(/\s+/g, " ");
@@ -49,7 +53,7 @@ function normalizeAnswer(text: string): string {
 function speak(text: string): void {
   try {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      toast("Your browser does not support speech playback.");
+      toast(t("practice.speech.unsupported"));
       return;
     }
     const utterance = new SpeechSynthesisUtterance(text);
@@ -58,7 +62,7 @@ function speak(text: string): void {
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
   } catch {
-    toast("Speech playback is not available right now.");
+    toast(t("practice.speech.unavailable"));
   }
 }
 
@@ -94,7 +98,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
       setIndex(0);
       resetCard();
     } catch (err) {
-      setError(describeApiError(err, "Could not load the practice queue."));
+      setError(describeApiError(err, t("practice.load.error")));
     } finally {
       setLoading(false);
     }
@@ -121,12 +125,12 @@ export function Practice({ workspace }: { workspace: Workspace }) {
         correct,
       });
       if (correct) {
-        toast.success(res.status === "remembered" ? `"${item.word}" is remembered!` : `"${item.word}" marked as learning.`);
+        toast.success(res.status === "remembered" ? t("practice.toast.remembered", { word: item.word }) : t("practice.toast.learning", { word: item.word }));
       } else {
-        toast(`"${item.word}" needs revision; it will come back in 10 minutes.`);
+        toast(t("practice.toast.needs_revision", { word: item.word }));
       }
     } catch (err) {
-      toast.error(describeApiError(err, "Review failed"));
+      toast.error(describeApiError(err, t("practice.toast.review_failed")));
     }
   }
 
@@ -169,11 +173,11 @@ export function Practice({ workspace }: { workspace: Workspace }) {
     const field = item.mode === "word_to_bengali" ? { bengaliMeaning: correctionValue } : { englishMeaning: correctionValue };
     try {
       await api.patch(`/api/ws/${workspace.id}/dictionary/${item.entryId}`, field);
-      toast.success("Meaning updated in the dictionary.");
+      toast.success(t("practice.toast.meaning_updated"));
       setShowCorrection(false);
       setCorrectionValue("");
     } catch (err) {
-      toast.error(describeApiError(err, "Could not update the meaning"));
+      toast.error(describeApiError(err, t("practice.toast.correction_failed")));
     }
   }
 
@@ -185,16 +189,16 @@ export function Practice({ workspace }: { workspace: Workspace }) {
   return (
     <div>
       <PageHeader
-        title="Practice & Revision"
-        subtitle="Spaced repetition on your workspace's approved words. You have to actually answer; viewing a card never marks it mastered."
+        title={t("practice.title")}
+        subtitle={t("practice.subtitle")}
         actions={
           <label className="bilingual" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            Mode
+            {t("practice.mode.label")}
             <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="mixed">{MODE_LABELS.mixed}</option>
+              <option value="mixed">{modeLabel("mixed")}</option>
               {PRACTICE_MODES.map((m) => (
                 <option key={m} value={m}>
-                  {MODE_LABELS[m] ?? m}
+                  {modeLabel(m)}
                 </option>
               ))}
             </select>
@@ -204,35 +208,35 @@ export function Practice({ workspace }: { workspace: Workspace }) {
 
       {stats && (
         <div className="metrics">
-          <Stat value={stats.dueNow} label="Due now" />
-          <Stat value={stats.new} label="New" />
-          <Stat value={stats.learning} label="Learning" />
-          <Stat value={stats.remembered} label="Remembered" />
-          <Stat value={stats.needsRevision} label="Needs revision" />
+          <Stat value={stats.dueNow} label={t("practice.stats.due")} />
+          <Stat value={stats.new} label={t("practice.stats.new")} />
+          <Stat value={stats.learning} label={t("practice.stats.learning")} />
+          <Stat value={stats.remembered} label={t("practice.stats.remembered")} />
+          <Stat value={stats.needsRevision} label={t("practice.stats.needs_revision")} />
         </div>
       )}
 
       <ErrorNote message={error} />
       {error && (
         <Button variant="outline" onClick={() => void load()}>
-          <RotateCcw size={15} /> Retry
+          <RotateCcw size={15} /> {t("common.retry")}
         </Button>
       )}
 
       {!error && !current ? (
         <EmptyState
-          title="Nothing due right now"
-          body="Words come back on a schedule: answer correctly and the interval grows, miss one and it returns in 10 minutes."
+          title={t("practice.empty.title")}
+          body={t("practice.empty.body")}
           action={
             <Button variant="outline" onClick={() => void load()}>
-              Refresh
+              {t("common.refresh")}
             </Button>
           }
         />
       ) : (
         current && (
           <div className="card practice-card">
-            <Badge tone="violet">{MODE_LABELS[current.mode] ?? current.mode}</Badge>
+            <Badge tone="violet">{modeLabel(current.mode)}</Badge>
             <div className="practice-word mono">{current.word}</div>
             <p className="bilingual">
               <StatusBadge status={current.status} /> · {current.partOfSpeech}
@@ -240,7 +244,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
 
             {current.mode === "word_to_bengali" && phase === "answering" && (
               <>
-                <p className="bilingual">What does this word mean in Bengali?</p>
+                <p className="bilingual">{t("practice.q.word_to_bengali")}</p>
                 <TypedAnswer
                   answer={answer}
                   setAnswer={setAnswer}
@@ -251,7 +255,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
 
             {current.mode === "word_to_english" && phase === "answering" && (
               <>
-                <p className="bilingual">What does this word mean in English?</p>
+                <p className="bilingual">{t("practice.q.word_to_english")}</p>
                 <TypedAnswer
                   answer={answer}
                   setAnswer={setAnswer}
@@ -265,7 +269,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
                 <p style={{ fontSize: 22, fontWeight: 700 }}>
                   {current.mode === "bengali_to_word" ? current.bengaliMeaning : current.englishMeaning}
                 </p>
-                <p className="bilingual">Which word carries this meaning?</p>
+                <p className="bilingual">{t("practice.q.which_word")}</p>
                 {mcqReady ? (
                   <McqOptions options={current.options!} picked={picked} onPick={(o) => void pickOption(current, o)} />
                 ) : (
@@ -273,7 +277,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
                     answer={answer}
                     setAnswer={setAnswer}
                     onSubmit={() => void submitTyped(current, current.word)}
-                    placeholder="Type the word"
+                    placeholder={t("practice.answer.placeholder_word")}
                   />
                 )}
               </>
@@ -281,7 +285,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
 
             {current.mode === "fill_blank" && phase === "answering" && (
               <>
-                <p className="bilingual">Complete the sentence with this word:</p>
+                <p className="bilingual">{t("practice.q.fill_blank")}</p>
                 <p className="mono" style={{ fontSize: 18, margin: "8px 0 14px" }}>
                   {current.contextSentence ?? `____ : ${current.englishMeaning}`}
                 </p>
@@ -289,7 +293,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
                   answer={answer}
                   setAnswer={setAnswer}
                   onSubmit={() => void submitTyped(current, current.word)}
-                  placeholder="Type the missing word"
+                  placeholder={t("practice.answer.placeholder_missing")}
                 />
               </>
             )}
@@ -302,7 +306,9 @@ export function Practice({ workspace }: { workspace: Workspace }) {
                   </p>
                 )}
                 <p className="bilingual">
-                  Which word fits{current.contextSentence ? " the blank" : ""}? ({current.englishMeaning})
+                  {current.contextSentence
+                    ? t("practice.q.choose_word", { meaning: current.englishMeaning })
+                    : t("practice.q.choose_word_plain", { meaning: current.englishMeaning })}
                 </p>
                 {mcqReady ? (
                   <McqOptions options={current.options!} picked={picked} onPick={(o) => void pickOption(current, o)} />
@@ -311,7 +317,7 @@ export function Practice({ workspace }: { workspace: Workspace }) {
                     answer={answer}
                     setAnswer={setAnswer}
                     onSubmit={() => void submitTyped(current, current.word)}
-                    placeholder="Type the word"
+                    placeholder={t("practice.answer.placeholder_word")}
                   />
                 )}
               </>
@@ -320,22 +326,24 @@ export function Practice({ workspace }: { workspace: Workspace }) {
             {current.mode === "pronunciation" && phase === "answering" && (
               <>
                 <p className="bilingual">
-                  Say it out loud{current.pronunciationGuide ? ` (syllables: ${current.pronunciationGuide})` : ""}:
+                  {current.pronunciationGuide
+                    ? t("practice.q.pronunciation", { guide: current.pronunciationGuide })
+                    : t("practice.q.pronunciation_plain")}
                 </p>
                 <div style={{ display: "flex", gap: 10, justifyContent: "center", margin: "8px 0 14px" }}>
                   <Button variant="outline" onClick={() => speak(current.word)}>
-                    <Volume2 size={15} /> Hear it
+                    <Volume2 size={15} /> {t("practice.q.hear_it")}
                   </Button>
                 </div>
                 <p className="bilingual" style={{ marginBottom: 10 }}>
-                  Then tell us honestly how it went:
+                  {t("practice.q.tell_honestly")}
                 </p>
                 <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
                   <Button variant="danger" onClick={() => void selfReport(current, false)}>
-                    <X size={15} /> Not quite yet
+                    <X size={15} /> {t("practice.q.not_quite")}
                   </Button>
                   <Button onClick={() => void selfReport(current, true)}>
-                    <Check size={15} /> I said it clearly
+                    <Check size={15} /> {t("practice.q.said_clearly")}
                   </Button>
                 </div>
               </>
@@ -344,21 +352,21 @@ export function Practice({ workspace }: { workspace: Workspace }) {
             {phase === "feedback" && (
               <div role="status" aria-live="polite">
                 <p style={{ fontSize: 18, fontWeight: 700, color: wasCorrect ? "var(--ok, #1a7f5a)" : "var(--danger, #b3372f)" }}>
-                  {wasCorrect ? "Correct!" : "Not quite."}
+                  {wasCorrect ? t("practice.feedback.correct") : t("practice.feedback.wrong")}
                 </p>
                 <p style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)" }}>
                   {current.word} = {current.englishMeaning} · {current.bengaliMeaning}
                 </p>
                 {!wasCorrect && answer.trim() && (
-                  <p className="bilingual">You answered: “{answer.trim()}”</p>
+                  <p className="bilingual">{t("practice.feedback.your_answer", { answer: answer.trim() })}</p>
                 )}
                 {!wasCorrect && picked && (
-                  <p className="bilingual">You picked: “{picked}”</p>
+                  <p className="bilingual">{t("practice.feedback.you_picked", { answer: picked })}</p>
                 )}
                 {current.mode === "pronunciation" && (
                   <div style={{ display: "flex", justifyContent: "center", margin: "8px 0" }}>
                     <Button variant="outline" onClick={() => speak(current.word)}>
-                      <Volume2 size={15} /> Hear it again
+                      <Volume2 size={15} /> {t("practice.q.hear_again")}
                     </Button>
                   </div>
                 )}
@@ -367,29 +375,31 @@ export function Practice({ workspace }: { workspace: Workspace }) {
                   (current.mode === "word_to_bengali" || current.mode === "word_to_english") &&
                   !showCorrection && (
                     <p className="bilingual">
-                      Knew it, but the dictionary's meaning was the wrong one?{" "}
+                      {t("practice.feedback.correction_intro")}{" "}
                       <Button variant="outline" size="sm" onClick={() => setShowCorrection(true)}>
-                        <Eye size={14} /> My answer was also correct
+                        <Eye size={14} /> {t("practice.feedback.correction_button")}
                       </Button>
                     </p>
                   )}
                 {!wasCorrect && showCorrection && (
                   <div style={{ maxWidth: 380, margin: "10px auto", display: "grid", gap: 8 }}>
                     <p className="bilingual">
-                      Replace the {current.mode === "word_to_bengali" ? "Bengali" : "English"} meaning with your answer:
+                      {current.mode === "word_to_bengali"
+                        ? t("practice.feedback.correction_replace_bn")
+                        : t("practice.feedback.correction_replace_en")}
                     </p>
                     <input
                       className="input"
                       value={correctionValue}
                       onChange={(e) => setCorrectionValue(e.target.value)}
-                      placeholder={answer.trim() || "Your meaning"}
+                      placeholder={answer.trim() || t("practice.feedback.correction_placeholder")}
                     />
                     <div style={{ display: "flex", gap: 10 }}>
                       <Button onClick={() => void saveCorrection(current)} disabled={!correctionValue.trim()}>
-                        Save meaning
+                        {t("practice.feedback.correction_save")}
                       </Button>
                       <Button variant="outline" onClick={() => setShowCorrection(false)}>
-                        Keep dictionary's version
+                        {t("practice.feedback.correction_keep")}
                       </Button>
                     </div>
                   </div>
@@ -397,14 +407,14 @@ export function Practice({ workspace }: { workspace: Workspace }) {
 
                 <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14 }}>
                   <Button onClick={() => void advance()}>
-                    {index + 1 < items.length ? "Next word" : "Finish session"}
+                    {index + 1 < items.length ? t("practice.nav.next_word") : t("practice.nav.finish")}
                   </Button>
                 </div>
               </div>
             )}
 
             <p className="bilingual" style={{ marginTop: 16 }}>
-              Card {index + 1} of {items.length}
+              {t("practice.progress.card", { index: index + 1, total: items.length })}
             </p>
           </div>
         )
@@ -435,12 +445,12 @@ function TypedAnswer({
       <input
         className="input"
         style={{ maxWidth: 320 }}
-        placeholder={placeholder ?? "Type your answer"}
+        placeholder={placeholder ?? t("practice.answer.placeholder")}
         value={answer}
         onChange={(e) => setAnswer(e.target.value)}
       />
       <Button type="submit" disabled={!answer.trim()}>
-        <Check size={15} /> Check answer
+        <Check size={15} /> {t("practice.answer.check")}
       </Button>
     </form>
   );

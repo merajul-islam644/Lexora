@@ -1,34 +1,36 @@
 import { ApiError } from "./api.js";
+import { t } from "./i18n/index.js";
 
 /* One honest, human sentence per known failure shape, shared by every error
    surface (generate, practice, tools, dictionary, member ops). Known error
    codes get their own line so the UI never shows a raw stack; anything else
-   keeps the server's own message. */
+   keeps the server's own message. The canned lines come from the common
+   dictionary, so they localize with everything else. */
 
-export function describeApiError(err: unknown, fallback = "That didn't work. Please try again."): string {
+export function describeApiError(err: unknown, fallback = t("common.error_generic")): string {
   if (err instanceof ApiError) {
     switch (err.code) {
       case "rate_limited":
-        return "Hold on a moment — try again in about 30 seconds. (This cooldown is an in-browser safeguard, not a server quota.)";
+        return t("common.error_rate_limited");
       case "job_active":
-        return "A generation is already running for this workspace. Wait for it to finish, or cancel it first.";
+        return t("common.error_job_active");
       case "no_language":
-        return "Generate your language first — this tool coins words using your language's own sound and derivation rules.";
+        return t("common.error_no_language");
       case "dictionary_empty":
-        return "Your dictionary is empty. Add or import words first, or start with the starter dictionary.";
+        return t("common.error_dictionary_empty");
       case "not_found":
-        return "Not found — it may have been deleted, or you may not have access to it.";
+        return t("common.error_not_found");
       case "forbidden":
-        return "Your role in this workspace doesn't allow that.";
+        return t("common.error_forbidden");
       case "provider_not_configured":
-        return "Generation is not configured right now. Please try again later.";
+        return t("common.error_provider");
       default:
         return err.message || fallback;
     }
   }
   // Network-layer failures (fetch/OIDC renewal) surface as TypeError.
   if (err instanceof TypeError) {
-    return "Network problem — check your connection, sign in again, and retry.";
+    return t("common.error_network");
   }
   return err instanceof Error && err.message ? err.message : fallback;
 }

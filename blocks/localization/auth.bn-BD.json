@@ -1,0 +1,12 @@
+{
+  "signin.title": "সাইন ইন",
+  "signin.sso_body": "তোমার প্রতিষ্ঠানের SELISE Blocks অ্যাকাউন্ট ব্যবহার করো; Lexora-র আলাদা কোনো পাসওয়ার্ড নেই।",
+  "signin.sso_button": "Blocks SSO দিয়ে সাইন ইন করো",
+  "signin.not_configured": "SSO কনফিগার করা নেই। .env ফাইলে VITE_BLOCKS_OIDC_CLIENT_ID সেট করো।",
+  "signin.signed_in_as": "তুমি Blocks-এ সাইন ইন করা আছ হিসেবে",
+  "signin.fallback_user": "একজন Blocks ব্যবহারকারী",
+  "signin.continue": "অ্যাপে যাও",
+  "signin.entering": "প্রবেশ চলছে…",
+  "signin.start_failed": "SSO সাইন-ইন শুরু করা গেল না।",
+  "signin.complete_failed": "সাইন-ইন সম্পন্ন করা গেল না।"
+}

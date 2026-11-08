@@ -6,6 +6,11 @@ import { defineConfig, loadEnv } from "vite";
    (dirion.slsblx.com) so Blocks hosted login works locally -- the SSO
    session cookie is Secure and domain-scoped, so browsers refuse it on
    plain http://localhost. Run `npm run cert` once it's set. */
+
+/* NOTE: touching this file restarts the dev server (Vite watches its own
+   config). That's how a running server picks up directories created after
+   it started -- e.g. src/web/i18n/ -- whose file watchers it otherwise
+   misses on Windows. */
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const domain = env.VITE_BLOCKS_DEV_HOST || undefined;

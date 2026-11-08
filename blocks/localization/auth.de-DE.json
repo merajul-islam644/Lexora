@@ -1,0 +1,12 @@
+{
+  "signin.complete_failed": "Anmeldung konnte nicht abgeschlossen werden.",
+  "signin.continue": "Weiter zur App",
+  "signin.entering": "Eingeben…",
+  "signin.fallback_user": "ein Blocks-Benutzer",
+  "signin.not_configured": "SSO ist nicht konfiguriert. Setzen Sie VITE_BLOCKS_OIDC_CLIENT_ID in .env.",
+  "signin.signed_in_as": "Sie sind bei Blocks angemeldet als",
+  "signin.sso_body": "Verwenden Sie das SELISE Blocks-Konto Ihrer Organisation; es gibt kein separates Lexora-Passwort.",
+  "signin.sso_button": "Mit Blocks SSO anmelden",
+  "signin.start_failed": "SSO-Anmeldung konnte nicht gestartet werden.",
+  "signin.title": "Anmelden"
+}

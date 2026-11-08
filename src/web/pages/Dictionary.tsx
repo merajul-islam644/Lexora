@@ -22,6 +22,7 @@ import {
 import { describeApiError } from "../errors.js";
 import { useSession } from "../state.js";
 import { toast } from "sonner";
+import { t } from "../i18n/index.js";
 import {
   Badge,
   Button,
@@ -198,21 +199,21 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
   return (
     <div>
       <PageHeader
-        title="Dictionary"
-        subtitle={`${data?.total ?? "…"} words · Bengali and English references are kept with every word.`}
+        title={t("dictionary.title")}
+        subtitle={t("dictionary.subtitle", { count: data?.total ?? "…" })}
         actions={
           <>
             {canWrite && (
               <Button variant="outline" onClick={() => setIoOpen("import")}>
-                <FileUp size={15} /> Import
+                <FileUp size={15} /> {t("common.import")}
               </Button>
             )}
             <Button variant="outline" onClick={() => setIoOpen("export")}>
-              <Download size={15} /> Export
+              <Download size={15} /> {t("common.export")}
             </Button>
             {canWrite && (
               <Button onClick={() => setEditing("new")}>
-                <Plus size={15} /> Add word
+                <Plus size={15} /> {t("dictionary.add_word")}
               </Button>
             )}
           </>
@@ -231,14 +232,14 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
             }}
           />
           <Input
-            placeholder="Search word, Beng or English…"
+            placeholder={t("dictionary.search_placeholder")}
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
               setPage(1);
             }}
             style={{ paddingLeft: 32 }}
-            aria-label="Search dictionary"
+            aria-label={t("dictionary.search_aria")}
           />
         </div>
         <Select
@@ -247,9 +248,9 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
             setPos(v);
             setPage(1);
           }}
-          aria-label="Filter by part of speech"
+          aria-label={t("dictionary.filter.pos_aria")}
         >
-          <option value="">All parts of speech</option>
+          <option value="">{t("dictionary.filter.pos_all")}</option>
           {PARTS_OF_SPEECH.map((p) => (
             <option key={p} value={p}>
               {p}
@@ -262,12 +263,12 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
             setSource(v);
             setPage(1);
           }}
-          aria-label="Filter by source"
+          aria-label={t("dictionary.filter.source_aria")}
         >
-          <option value="">All sources</option>
-          <option value="user">Your words</option>
-          <option value="generated">Generated drafts</option>
-          <option value="imported">Imported</option>
+          <option value="">{t("dictionary.filter.source_all")}</option>
+          <option value="user">{t("dictionary.filter.source_user")}</option>
+          <option value="generated">{t("dictionary.filter.source_generated")}</option>
+          <option value="imported">{t("dictionary.filter.source_imported")}</option>
         </Select>
         <Select
           value={status}
@@ -275,40 +276,40 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
             setStatus(v);
             setPage(1);
           }}
-          aria-label="Filter by review status"
+          aria-label={t("dictionary.filter.status_aria")}
         >
-          <option value="">Drafts + approved</option>
-          <option value="draft">Drafts to review</option>
-          <option value="approved">Approved</option>
+          <option value="">{t("dictionary.filter.status_default")}</option>
+          <option value="draft">{t("dictionary.filter.status_drafts")}</option>
+          <option value="approved">{t("dictionary.filter.status_approved")}</option>
         </Select>
         <Select
           value={sort}
           onChange={(v) => setSort(v)}
-          aria-label="Sort order"
+          aria-label={t("dictionary.filter.sort_aria")}
         >
-          <option value="alpha">A → Z</option>
-          <option value="newest">Newest first</option>
-          <option value="updated">Recently updated</option>
-          <option value="needs_revision">Needs revision first</option>
+          <option value="alpha">{t("dictionary.filter.sort_alpha")}</option>
+          <option value="newest">{t("dictionary.filter.sort_newest")}</option>
+          <option value="updated">{t("dictionary.filter.sort_updated")}</option>
+          <option value="needs_revision">{t("dictionary.filter.sort_needs_revision")}</option>
         </Select>
       </div>
 
       {!data || data.items.length === 0 ? (
         <EmptyState
           title={
-            q || pos || source || status ? "No words match" : "Your dictionary is empty"
+            q || pos || source || status ? t("dictionary.empty.filtered_title") : t("dictionary.empty.title")
           }
           body={
             q || pos || source || status
-              ? "Try a different search or filter."
+              ? t("dictionary.empty.filtered_body")
               : canWrite
-                ? "Add your first word. It only needs the word itself, but a বাংলা or English reference makes generation much better."
-                : "An editor hasn't added words yet."
+                ? t("dictionary.empty.body_writer")
+                : t("dictionary.empty.body_viewer")
           }
           action={
             canWrite && !q && !pos && !source && !status ? (
               <Button onClick={() => setEditing("new")}>
-                Add your first word
+                {t("dictionary.empty.add_first")}
               </Button>
             ) : undefined
           }
@@ -319,13 +320,13 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Language word</th>
-                  <th>Bengali reference</th>
-                  <th>English reference</th>
-                  <th>Parts of speech</th>
-                  <th>Pronunciation</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th>{t("dashboard.table.language_word")}</th>
+                  <th>{t("dictionary.table.bengali_reference")}</th>
+                  <th>{t("dictionary.table.english_reference")}</th>
+                  <th>{t("dictionary.table.parts_of_speech")}</th>
+                  <th>{t("dashboard.table.pronunciation")}</th>
+                  <th>{t("dictionary.table.status")}</th>
+                  <th>{t("dictionary.table.actions")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -356,7 +357,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
                             size="sm"
                             className="btn-icon"
                             onClick={() => setEditing(e)}
-                            aria-label={`Edit ${e.word}`}
+                            aria-label={t("dictionary.edit.aria", { word: e.word })}
                           >
                             <Pencil size={14} />
                           </Button>
@@ -384,10 +385,10 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
             disabled={page <= 1}
             onClick={() => setPage(page - 1)}
           >
-            Previous
+            {t("common.previous")}
           </Button>
           <span>
-            Page {data.page} of {totalPages} · {data.total} words
+            {t("common.page_x_of_y", { page: data.page, total: totalPages })} · {t("dictionary.pagination.words", { count: data.total })}
           </span>
           <Button
             variant="outline"
@@ -395,7 +396,7 @@ export function DictionaryPage({ workspace }: { workspace: Workspace }) {
             disabled={page >= totalPages}
             onClick={() => setPage(page + 1)}
           >
-            Next
+            {t("common.next")}
           </Button>
         </div>
       )}
@@ -466,17 +467,17 @@ function EditDialog({
           `/api/ws/${workspaceId}/dictionary/${entry.id}`,
           payloadFromForm(form),
         );
-        toast.success(`"${form.word}" updated.`);
+        toast.success(t("dictionary.toast.updated", { word: form.word }));
       } else {
         await api.post(
           `/api/ws/${workspaceId}/dictionary`,
           payloadFromForm(form),
         );
-        toast.success(`"${form.word}" added to your dictionary.`);
+        toast.success(t("dictionary.toast.added", { word: form.word }));
       }
       await onSaved();
     } catch (err) {
-      setError(describeApiError(err, "Could not save the word"));
+      setError(describeApiError(err, t("dictionary.save_error")));
     } finally {
       setBusy(false);
     }
@@ -484,23 +485,23 @@ function EditDialog({
 
   return (
     <Modal
-      title={entry ? `Edit "${entry.word}"` : "Add a word"}
+      title={entry ? t("dictionary.edit.title_existing", { word: entry.word }) : t("dictionary.edit.title_new")}
       onClose={onClose}
       wide
     >
       <form onSubmit={submit} noValidate>
         <div className="form-row">
-          <Field label="Constructed word">
+          <Field label={t("dictionary.edit.word_label")}>
             <Input
               ref={firstInput}
               value={form.word}
               onChange={set("word")}
               required
               maxLength={80}
-              placeholder="e.g. vethra"
+              placeholder={t("dictionary.edit.word_placeholder")}
             />
           </Field>
-          <Field label="Part of speech">
+          <Field label={t("dictionary.edit.pos_label")}>
             <Select
               value={form.partOfSpeech}
               onChange={(v) => setForm((f) => ({ ...f, partOfSpeech: v }))}
@@ -514,65 +515,63 @@ function EditDialog({
           </Field>
         </div>
         <div className="form-row">
-          <Field label="বাংলা reference">
+          <Field label={t("dictionary.edit.bengali_label")}>
             <Input
               value={form.bengaliMeaning}
               onChange={set("bengaliMeaning")}
               maxLength={200}
-              placeholder="e.g. চুক্তি"
+              placeholder={t("dictionary.edit.bengali_placeholder")}
             />
           </Field>
-          <Field label="English reference">
+          <Field label={t("dictionary.edit.english_label")}>
             <Input
               value={form.englishMeaning}
               onChange={set("englishMeaning")}
               maxLength={200}
-              placeholder="e.g. agreement"
+              placeholder={t("dictionary.edit.english_placeholder")}
             />
           </Field>
         </div>
         <div className="form-row">
-          <Field label="Pronunciation guide" hint="e.g. VEH-thrah">
+          <Field label={t("dictionary.edit.pronunciation_label")} hint={t("dictionary.edit.pronunciation_hint")}>
             <Input
               value={form.pronunciationGuide}
               onChange={set("pronunciationGuide")}
               maxLength={120}
             />
           </Field>
-          <Field label="IPA">
+          <Field label={t("dictionary.edit.ipa_label")}>
             <Input value={form.ipa} onChange={set("ipa")} maxLength={120} />
           </Field>
         </div>
-        <Field label="Root / formation notes">
+        <Field label={t("dictionary.edit.root_label")}>
           <Input
             value={form.root}
             onChange={set("root")}
             maxLength={120}
-            placeholder="e.g. veth + -ra"
+            placeholder={t("dictionary.edit.root_placeholder")}
           />
         </Field>
         <Field
-          label="Example sentences"
-          hint="One per line: constructed | english | bengali"
+          label={t("dictionary.edit.examples_label")}
+          hint={t("dictionary.edit.examples_hint")}
         >
           <Textarea
             value={form.examplesText}
             onChange={set("examplesText")}
             rows={3}
-            placeholder={
-              "vethra kairum et | We approve the agreement | আমরা চুক্তিটি অনুমোদন করি"
-            }
+            placeholder={t("dictionary.edit.examples_placeholder")}
           />
         </Field>
         <div className="form-row">
-          <Field label="Grammar notes">
+          <Field label={t("dictionary.edit.grammar_label")}>
             <Input
               value={form.grammarNotes}
               onChange={set("grammarNotes")}
               maxLength={600}
             />
           </Field>
-          <Field label="Mnemonic">
+          <Field label={t("dictionary.edit.mnemonic_label")}>
             <Input
               value={form.mnemonic}
               onChange={set("mnemonic")}
@@ -588,13 +587,13 @@ function EditDialog({
             onClick={onClose}
             disabled={busy}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             type="submit"
             disabled={busy || form.word.trim().length === 0}
           >
-            {busy ? "Saving…" : entry ? "Save changes" : "Add word"}
+            {busy ? t("common.saving") : entry ? t("dictionary.edit.save_changes") : t("dictionary.edit.add_word")}
           </Button>
         </div>
       </form>
@@ -620,14 +619,14 @@ function ArchiveButton({
     try {
       if (entry.archived) {
         await api.post(`/api/ws/${workspaceId}/dictionary/${entry.id}/restore`);
-        toast(`"${entry.word}" restored.`);
+        toast(t("dictionary.toast.restored", { word: entry.word }));
       } else {
         await api.del(`/api/ws/${workspaceId}/dictionary/${entry.id}`);
-        toast(`"${entry.word}" archived.`);
+        toast(t("dictionary.toast.archived", { word: entry.word }));
       }
       await onDone();
     } catch (err) {
-      toast.error(describeApiError(err, "Action failed"));
+      toast.error(describeApiError(err, t("dictionary.toast.action_failed")));
     } finally {
       setBusy(false);
     }
@@ -641,7 +640,7 @@ function ArchiveButton({
       onClick={act}
       disabled={busy}
       aria-label={
-        entry.archived ? `Restore ${entry.word}` : `Archive ${entry.word}`
+        entry.archived ? t("dictionary.restore.aria", { word: entry.word }) : t("dictionary.archive.aria", { word: entry.word })
       }
     >
       {entry.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
@@ -659,10 +658,9 @@ function ExportDialog({
   onClose: () => void;
 }) {
   return (
-    <Modal title="Export dictionary" onClose={onClose}>
+    <Modal title={t("dictionary.export.title")} onClose={onClose}>
       <p className="bilingual">
-        Download the whole dictionary (archived words excluded). Exports are
-        recorded in your activity log.
+        {t("dictionary.export.body")}
       </p>
       <button
         className="modal-option"
@@ -676,7 +674,7 @@ function ExportDialog({
         <span className="modal-option-text">
           <span className="modal-option-title">CSV</span>
           <span className="modal-option-sub">
-            Opens in Excel or Google Sheets
+            {t("dictionary.export.csv_sub")}
           </span>
         </span>
         <Download
@@ -697,7 +695,7 @@ function ExportDialog({
         <span className="modal-option-text">
           <span className="modal-option-title">JSON</span>
           <span className="modal-option-sub">
-            Every field, best for backups and re-import
+            {t("dictionary.export.json_sub")}
           </span>
         </span>
         <Download
@@ -759,7 +757,7 @@ function ImportDialog({
       setReport(res.report);
       setRows(res.report.rows);
     } catch (err) {
-      setError(describeApiError(err, "Could not read the file"));
+      setError(describeApiError(err, t("dictionary.import.read_error")));
     } finally {
       setBusy(false);
     }
@@ -773,23 +771,28 @@ function ImportDialog({
         skippedDuplicates: number;
       }>(`/api/ws/${workspaceId}/dictionary/import/commit`, { rows });
       toast.success(
-        `Imported ${res.imported} word${res.imported === 1 ? "" : "s"}${res.skippedDuplicates > 0 ? `, skipped ${res.skippedDuplicates} duplicates` : ""}.`,
+        t(
+          res.imported === 1
+            ? "dictionary.import.toast_one"
+            : "dictionary.import.toast_many",
+          { count: res.imported },
+        ) + (res.skippedDuplicates > 0 ? t("dictionary.import.toast_skipped", { count: res.skippedDuplicates }) : "") + ".",
       );
       await onImported();
       onClose();
     } catch (err) {
-      setError(describeApiError(err, "Import failed"));
+      setError(describeApiError(err, t("dictionary.import.failed")));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal title="Import words" onClose={onClose}>
+    <Modal title={t("dictionary.import.title")} onClose={onClose}>
       <p className="bilingual">
-        CSV or JSON. CSV needs a <code>word</code> column;{" "}
+        {t("dictionary.import.body_prefix")} <code>word</code> {t("dictionary.import.body_suffix")}{" "}
         <button className="btn btn-ghost btn-sm" onClick={downloadTemplate}>
-          download the template
+          {t("dictionary.import.template_link")}
         </button>
         .
       </p>
@@ -797,7 +800,7 @@ function ImportDialog({
         className={`dropzone${dragOver ? " over" : ""}`}
         role="button"
         tabIndex={0}
-        aria-label="Choose a CSV or JSON file, or drop one here"
+        aria-label={t("dictionary.import.dropzone_aria")}
         onClick={() => fileInputRef.current?.click()}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -819,9 +822,9 @@ function ImportDialog({
       >
         <Upload size={20} aria-hidden="true" />
         <div>
-          <strong>Choose a file</strong> or drop it here
+          <strong>{t("dictionary.import.dropzone_text")}</strong> {t("dictionary.import.dropzone_or")}
         </div>
-        <span className="field-hint">.csv or .json</span>
+        <span className="field-hint">{t("dictionary.import.dropzone_hint")}</span>
       </div>
       <Input
         ref={fileInputRef}
@@ -842,33 +845,33 @@ function ImportDialog({
 
       {report && (
         <div style={{ marginTop: 16 }}>
-          <h3>Preview</h3>
+          <h3>{t("dictionary.import.preview_title")}</h3>
           <div
             className="metrics"
             style={{ gridTemplateColumns: "repeat(4, 1fr)", margin: "12px 0" }}
           >
             <div className="stat">
               <div className="stat-value">{report.validCount}</div>
-              <div className="stat-label">Ready to import</div>
+              <div className="stat-label">{t("dictionary.import.stat_ready")}</div>
             </div>
             <div className="stat">
               <div className="stat-value">{report.duplicatesInFile.length}</div>
-              <div className="stat-label">Duplicates in file</div>
+              <div className="stat-label">{t("dictionary.import.stat_duplicates")}</div>
             </div>
             <div className="stat">
               <div className="stat-value">
                 {report.duplicatesInDictionary.length}
               </div>
-              <div className="stat-label">Already in dictionary</div>
+              <div className="stat-label">{t("dictionary.import.stat_existing")}</div>
             </div>
             <div className="stat">
               <div className="stat-value">{report.invalid.length}</div>
-              <div className="stat-label">Invalid rows</div>
+              <div className="stat-label">{t("dictionary.import.stat_invalid")}</div>
             </div>
           </div>
           {report.invalid.slice(0, 5).map((i) => (
             <p key={i.row} className="error-text">
-              Row {i.row} "{i.word}": {i.issues.join(", ")}
+              {t("dictionary.import.invalid_row", { row: i.row, word: i.word, issues: i.issues.join(", ") })}
             </p>
           ))}
           {report.warnings.slice(0, 3).map((w, i) => (
@@ -878,11 +881,10 @@ function ImportDialog({
           ))}
           <div className="modal-actions">
             <Button variant="outline" onClick={onClose}>
-              Close
+              {t("common.close")}
             </Button>
             <Button onClick={commit} disabled={busy || report.validCount === 0}>
-              Import {report.validCount} word
-              {report.validCount === 1 ? "" : "s"}
+              {t("dictionary.import.commit", { count: report.validCount })}
             </Button>
           </div>
         </div>

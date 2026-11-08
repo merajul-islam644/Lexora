@@ -21,6 +21,7 @@ import { TranslationLab, WordBuilder } from "./pages/Tools.js";
 import { Practice } from "./pages/Practice.js";
 import { ActivityLog, SecurityAccess, Settings } from "./pages/Workspace.js";
 import { AppToaster } from "./ui.js";
+import { LocalizationProvider } from "./i18n/LocalizationProvider.js";
 
 /** Injects the active workspace (from session + localStorage) into app pages. */
 function WithWorkspace({ render }: { render: (ws: WorkspaceSummary) => React.ReactNode }) {
@@ -84,10 +85,12 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <BlocksAuthProvider>
-        <SessionProvider>
-          <AppToaster />
-          <AppRoutes />
-        </SessionProvider>
+        <LocalizationProvider>
+          <SessionProvider>
+            <AppToaster />
+            <AppRoutes />
+          </SessionProvider>
+        </LocalizationProvider>
       </BlocksAuthProvider>
     </BrowserRouter>
   </StrictMode>

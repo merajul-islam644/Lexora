@@ -6,6 +6,7 @@ import { describeApiError } from "../errors.js";
 import { useSession } from "../state.js";
 import { toast } from "sonner";
 import { Button, ErrorNote, Field, Input, LoadingScreen, PageHeader, Select } from "../ui.js";
+import { t } from "../i18n/index.js";
 
 /* ------------------------- first-run: create workspace ----------------------- */
 
@@ -28,10 +29,10 @@ export function Welcome() {
     try {
       await api.post("/api/workspaces", { name, organizationId: orgId || undefined });
       await refresh();
-      toast.success("Workspace created. Welcome!");
+      toast.success(t("dashboard.welcome.toast_created"));
       navigate("/app/dashboard");
     } catch (err) {
-      setError(describeApiError(err, "Could not create the workspace"));
+      setError(describeApiError(err, t("dashboard.welcome.error")));
     } finally {
       setBusy(false);
     }
@@ -41,20 +42,20 @@ export function Welcome() {
     <div className="auth-page">
       <div className="auth-card" style={{ maxWidth: 480 }}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
-          <h1 style={{ fontSize: 24 }}>Welcome, {user?.name || user?.email.split("@")[0] || "there"}!</h1>
-          <p className="bilingual">Create your first workspace: a private home for your dictionary and language.</p>
+          <h1 style={{ fontSize: 24 }}>{t("dashboard.welcome.title", { name: user?.name || user?.email.split("@")[0] || t("dashboard.greeting.fallback_name") })}</h1>
+          <p className="bilingual">{t("dashboard.welcome.body")}</p>
         </div>
         <div className="card">
           <form onSubmit={submit} noValidate>
-            <Field label="Workspace name" hint="Usually your company or team name.">
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Northstar Trading" minLength={2} maxLength={80} required autoFocus />
+            <Field label={t("dashboard.welcome.name_label")} hint={t("dashboard.welcome.name_hint")}>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("dashboard.welcome.name_placeholder")} minLength={2} maxLength={80} required autoFocus />
             </Field>
             <Field
-              label="Organization (optional)"
-              hint="A label from your SELISE Blocks directory — purely for grouping; it does not change who can enter."
+              label={t("dashboard.welcome.org_label")}
+              hint={t("dashboard.welcome.org_hint")}
             >
-              <Select value={orgId} onChange={setOrgId} aria-label="Organization">
-                <option value="">No organization</option>
+              <Select value={orgId} onChange={setOrgId} aria-label={t("dashboard.welcome.org_aria")}>
+                <option value="">{t("dashboard.welcome.org_none")}</option>
                 {organizations.map((o) => (
                   <option key={o.id} value={o.id}>{o.name}</option>
                 ))}
@@ -62,12 +63,12 @@ export function Welcome() {
             </Field>
             <ErrorNote message={error} />
             <Button type="submit" disabled={busy || name.trim().length < 2} style={{ width: "100%" }}>
-              {busy ? "Creating…" : "Create workspace"} <ArrowRight size={15} />
+              {busy ? t("dashboard.welcome.creating") : t("dashboard.welcome.create")} <ArrowRight size={15} />
             </Button>
           </form>
         </div>
         <p className="auth-alt">
-          You can create more workspaces later; each one gets its own private language.
+          {t("dashboard.welcome.alt")}
         </p>
       </div>
     </div>
@@ -85,18 +86,18 @@ interface DashboardData {
 }
 
 const ACTION_LABELS: Record<string, string> = {
-  "workspace.created": "Workspace created",
-  "dictionary.word_added": "Word added",
-  "dictionary.word_updated": "Word updated",
-  "dictionary.word_archived": "Word archived",
-  "dictionary.word_restored": "Word restored",
-  "dictionary.imported": "Dictionary imported",
-  "dictionary.exported": "Dictionary exported",
-  "language.created": "Language generated",
-  "language.regenerated": "Language regenerated",
-  "language.restored": "Version restored",
-  "language.renamed": "Language renamed",
-  "member.added": "Member added"
+  "workspace.created": "dashboard.action.workspace_created",
+  "dictionary.word_added": "dashboard.action.word_added",
+  "dictionary.word_updated": "dashboard.action.word_updated",
+  "dictionary.word_archived": "dashboard.action.word_archived",
+  "dictionary.word_restored": "dashboard.action.word_restored",
+  "dictionary.imported": "dashboard.action.dictionary_imported",
+  "dictionary.exported": "dashboard.action.dictionary_exported",
+  "language.created": "dashboard.action.language_created",
+  "language.regenerated": "dashboard.action.language_regenerated",
+  "language.restored": "dashboard.action.version_restored",
+  "language.renamed": "dashboard.action.language_renamed",
+  "member.added": "dashboard.action.member_added"
 };
 
 export function Dashboard() {
@@ -119,7 +120,7 @@ export function Dashboard() {
         const dash = await api.get<DashboardData>(`/api/ws/${id}/dashboard`);
         if (alive) setData(dash);
       } catch (err) {
-        if (alive) setError(describeApiError(err, "Could not load dashboard"));
+        if (alive) setError(describeApiError(err, t("dashboard.subtitle.error")));
       }
     })();
     return () => {
@@ -131,41 +132,40 @@ export function Dashboard() {
   if (!data) return <LoadingScreen />;
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const name = user?.name || user?.email.split("@")[0] || "there";
+  const greeting = hour < 12 ? t("dashboard.greeting.morning") : hour < 18 ? t("dashboard.greeting.afternoon") : t("dashboard.greeting.evening");
+  const name = user?.name || user?.email.split("@")[0] || t("dashboard.greeting.fallback_name");
 
   return (
     <div>
       <PageHeader
         title={`${greeting}, ${name}`}
-        subtitle={data.language ? "Your private business language is ready to grow." : "Start by building your dictionary, then generate your language."}
+        subtitle={data.language ? t("dashboard.subtitle.ready") : t("dashboard.subtitle.empty")}
       />
 
       {data.language ? (
         <div className="hero-language" style={{ marginBottom: 20 }}>
-          <span className="badge">Private to your workspace</span>
-          <div style={{ fontSize: 13, marginTop: 10, color: "#C9D5E2" }}>Your language is ready</div>
+          <span className="badge">{t("dashboard.hero.private_badge")}</span>
+          <div style={{ fontSize: 13, marginTop: 10, color: "#C9D5E2" }}>{t("dashboard.hero.ready_line")}</div>
           <div className="native">
             {data.language.name} <span className="bn" lang="bn" style={{ fontSize: 22, color: "#D8F5EF" }}>{data.language.nativeName}</span>
           </div>
           <p className="desc">{data.language.description}</p>
           <div className="actions">
-            <Link to="/app/language" className="btn btn-primary" style={{ textDecoration: "none" }}>Open My Language</Link>
+            <Link to="/app/language" className="btn btn-primary" style={{ textDecoration: "none" }}>{t("dashboard.hero.open_language")}</Link>
             <Link to="/app/dictionary" className="btn btn-outline" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }}>
-              Explore Dictionary
+              {t("dashboard.hero.explore_dictionary")}
             </Link>
           </div>
         </div>
       ) : (
         <div className="card" style={{ marginBottom: 20 }}>
-          <h2>No language yet</h2>
+          <h2>{t("dashboard.empty.title")}</h2>
           <p className="bilingual">
-            Add at least one word to your dictionary, then generate your language from it. Every generated word stays
-            reviewable, and regenerating keeps your previous versions.
+            {t("dashboard.empty.body")}
           </p>
           <div style={{ display: "flex", gap: 10 }}>
-            <Link to="/app/dictionary" className="btn btn-primary" style={{ textDecoration: "none" }}>Open Dictionary</Link>
-            <Link to="/app/language" className="btn btn-outline" style={{ textDecoration: "none" }}>Go to My Language</Link>
+            <Link to="/app/dictionary" className="btn btn-primary" style={{ textDecoration: "none" }}>{t("dashboard.empty.open_dictionary")}</Link>
+            <Link to="/app/language" className="btn btn-outline" style={{ textDecoration: "none" }}>{t("dashboard.empty.go_language")}</Link>
           </div>
         </div>
       )}
@@ -173,39 +173,39 @@ export function Dashboard() {
       <div className="metrics">
         <div className="stat">
           <div className="stat-value">{data.metrics.words}</div>
-          <div className="stat-label">Words</div>
+          <div className="stat-label">{t("dashboard.stats.words")}</div>
         </div>
         <div className="stat">
           <div className="stat-value">{data.metrics.grammarRules}</div>
-          <div className="stat-label">Grammar rules</div>
+          <div className="stat-label">{t("dashboard.stats.grammar_rules")}</div>
         </div>
         <div className="stat">
           <div className="stat-value">{data.metrics.mappedPercent}%</div>
-          <div className="stat-label">Dictionary mapped</div>
+          <div className="stat-label">{t("dashboard.stats.mapped")}</div>
         </div>
         <div className="stat">
           <div className="stat-value">{formatWhen(data.metrics.updatedAt)}</div>
-          <div className="stat-label">Last updated</div>
+          <div className="stat-label">{t("dashboard.stats.last_updated")}</div>
         </div>
       </div>
 
       <div className="grid-2">
         <div className="card">
           <div className="card-title">
-            <h3>Recent words</h3>
-            <Link to="/app/dictionary" className="btn btn-ghost btn-sm">View all</Link>
+            <h3>{t("dashboard.recent_words.title")}</h3>
+            <Link to="/app/dictionary" className="btn btn-ghost btn-sm">{t("dashboard.recent_words.view_all")}</Link>
           </div>
           {data.preview.length === 0 ? (
-            <p className="bilingual">No words yet; your dictionary is waiting for its first entry.</p>
+            <p className="bilingual">{t("dashboard.recent_words.empty")}</p>
           ) : (
             <div className="table-wrap">
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Language word</th>
-                    <th>বাংলা</th>
-                    <th>English</th>
-                    <th>Pronunciation</th>
+                    <th>{t("dashboard.table.language_word")}</th>
+                    <th>{t("dashboard.table.bengali")}</th>
+                    <th>{t("dashboard.table.english")}</th>
+                    <th>{t("dashboard.table.pronunciation")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -225,16 +225,16 @@ export function Dashboard() {
 
         <div className="card">
           <div className="card-title">
-            <h3>Recent activity</h3>
-            <Link to="/app/activity" className="btn btn-ghost btn-sm">View all</Link>
+            <h3>{t("dashboard.recent_activity.title")}</h3>
+            <Link to="/app/activity" className="btn btn-ghost btn-sm">{t("dashboard.recent_words.view_all")}</Link>
           </div>
           {data.activity.length === 0 ? (
-            <p className="bilingual">Nothing here yet.</p>
+            <p className="bilingual">{t("dashboard.recent_activity.empty")}</p>
           ) : (
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
               {data.activity.map((a) => (
                 <li key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 14 }}>
-                  <span>{ACTION_LABELS[a.action] ?? a.action}</span>
+                  <span>{ACTION_LABELS[a.action] ? t(ACTION_LABELS[a.action]) : a.action}</span>
                   <span className="bilingual" style={{ whiteSpace: "nowrap" }}>{formatWhen(a.createdAt)}</span>
                 </li>
               ))}
@@ -250,11 +250,11 @@ export function formatWhen(iso: string | null): string {
   if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return t("dashboard.when.just_now");
+  if (mins < 60) return t("dashboard.when.mins_ago", { n: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t("dashboard.when.hours_ago", { n: hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return t("dashboard.when.days_ago", { n: days });
   return new Date(iso).toLocaleDateString();
 }

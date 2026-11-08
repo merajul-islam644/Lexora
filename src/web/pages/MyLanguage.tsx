@@ -29,6 +29,7 @@ import {
 } from "../ui.js";
 import { formatWhen } from "./Dashboard.js";
 import { GEN_STYLES } from "../api.js";
+import { t } from "../i18n/index.js";
 
 /* My Language: generation (with honest stage progress, resume across reloads,
  * cancel/retry), grammar review (sounds, affixes, example sentences),
@@ -119,11 +120,11 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
           if (TERMINAL_STATUSES.includes(next.status)) {
             window.clearInterval(pollRef.current ?? undefined);
             if (next.status === "completed" && next.result) {
-              toast.success(`Language "${next.result.name}" is ready (version ${next.result.version}).`);
+              toast.success(t("generation.toast.ready", { name: next.result.name, version: next.result.version }));
             } else if (next.status === "failed") {
-              toast.error(next.error ?? "Generation failed. Nothing was saved.");
+              toast.error(next.error ?? t("generation.toast.failed_default"));
             } else if (next.status === "timeout") {
-              toast.error("Generation took too long and was stopped. Nothing was saved; you can retry.");
+              toast.error(t("generation.toast.timeout"));
             }
             await load();
             refreshSideData();
@@ -143,7 +144,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
       toast.success(res.message);
       await load();
     } catch (err) {
-      toast.error(describeApiError(err, "Could not add the starter dictionary"));
+      toast.error(describeApiError(err, t("generation.starter.error")));
     } finally {
       setStarterBusy(false);
     }
@@ -153,10 +154,10 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
     if (!job) return;
     try {
       await api.post(`/api/ws/${workspace.id}/language/jobs/${job.id}/cancel`);
-      toast.success("Generation cancelled. Nothing was saved.");
+      toast.success(t("generation.cancel.toast"));
       await load();
     } catch (err) {
-      toast.error(describeApiError(err, "Could not cancel the job"));
+      toast.error(describeApiError(err, t("generation.cancel.error")));
     }
   };
 
@@ -175,7 +176,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
     try {
       await downloadFile(`/api/ws/${workspace.id}/dictionary/export?format=csv`);
     } catch (err) {
-      toast.error(describeApiError(err, "Export failed"));
+      toast.error(describeApiError(err, t("generation.export.failed")));
     } finally {
       setExporting(false);
     }
@@ -188,14 +189,14 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
   return (
     <div>
       <PageHeader
-        title="My Language"
-        subtitle={language ? `Version ${language.version} · updated ${formatWhen(language.updatedAt)}` : "Generate your language from the dictionary."}
+        title={t("generation.title")}
+        subtitle={language ? t("generation.subtitle_version", { version: language.version, when: formatWhen(language.updatedAt) }) : t("generation.subtitle_empty")}
         actions={
           language && canEdit ? (
             <>
-              <Button variant="outline" onClick={() => setRenameOpen(true)}>Rename</Button>
+              <Button variant="outline" onClick={() => setRenameOpen(true)}>{t("generation.action.rename")}</Button>
               <Button onClick={() => { setGenPreset(null); setRegenConfirm(true); }}>
-                <RotateCcw size={15} /> Generate new version
+                <RotateCcw size={15} /> {t("generation.action.generate_new")}
               </Button>
             </>
           ) : null
@@ -205,20 +206,20 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
       {!language && !job && (
         <EmptyState
           icon={<SparklesIcon />}
-          title="Create your private language"
-          body="Generate a language with its own name, vocabulary, pronunciation, and grammar, connected to your Bengali and English references."
+          title={t("generation.empty.title")}
+          body={t("generation.empty.body")}
           action={
             canEdit ? (
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-                <Button onClick={() => { setGenPreset(null); setGenOpen(true); }}>Generate My Language</Button>
-                <Link to="/app/dictionary" className="btn btn-outline" style={{ textDecoration: "none" }}>Add Dictionary Words</Link>
-                <Link to="/app/dictionary?import=1" className="btn btn-outline" style={{ textDecoration: "none" }}>Import Dictionary</Link>
+                <Button onClick={() => { setGenPreset(null); setGenOpen(true); }}>{t("generation.empty.generate")}</Button>
+                <Link to="/app/dictionary" className="btn btn-outline" style={{ textDecoration: "none" }}>{t("generation.empty.add_words")}</Link>
+                <Link to="/app/dictionary?import=1" className="btn btn-outline" style={{ textDecoration: "none" }}>{t("generation.empty.import")}</Link>
                 <Button variant="outline" onClick={addStarter} disabled={starterBusy}>
-                  {starterBusy ? "Adding…" : "Start with the starter dictionary"}
+                  {starterBusy ? t("generation.empty.starter_busy") : t("generation.empty.starter")}
                 </Button>
               </div>
             ) : (
-              <p className="bilingual">Ask an editor or admin to generate the language.</p>
+              <p className="bilingual">{t("generation.empty.viewer_note")}</p>
             )
           }
         />
@@ -229,24 +230,24 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
       {language && (
         <>
           <div className="hero-language">
-            <span className="badge">Private to your workspace · v{language.version}</span>
+            <span className="badge">{t("generation.hero.private_badge", { version: language.version })}</span>
             <div className="native">
               {language.name} <span className="bn" lang="bn">{language.nativeName}</span>
             </div>
             <p className="desc">{language.description}</p>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 12, fontSize: 13, color: "#C9D5E2" }}>
-              <span>Word order: <strong style={{ color: "#fff" }}>{language.wordOrder ?? ""}</strong></span>
-              <span>Style: <strong style={{ color: "#fff" }}>{language.style ?? ""}</strong></span>
-              <span>Words: <strong style={{ color: "#fff" }}>{language.vocabularyCount}</strong></span>
-              <span>Rules: <strong style={{ color: "#fff" }}>{language.rulesCount}</strong></span>
-              <span>Created: <strong style={{ color: "#fff" }}>{formatWhen(language.createdAt)}</strong></span>
+              <span>{t("generation.hero.word_order")} <strong style={{ color: "#fff" }}>{language.wordOrder ?? ""}</strong></span>
+              <span>{t("generation.hero.style")} <strong style={{ color: "#fff" }}>{language.style ?? ""}</strong></span>
+              <span>{t("generation.hero.words")} <strong style={{ color: "#fff" }}>{language.vocabularyCount}</strong></span>
+              <span>{t("generation.hero.rules")} <strong style={{ color: "#fff" }}>{language.rulesCount}</strong></span>
+              <span>{t("generation.hero.created")} <strong style={{ color: "#fff" }}>{formatWhen(language.createdAt)}</strong></span>
             </div>
             {language.versionSummary && (
               <p className="bilingual" style={{ margin: "8px 0 0", fontSize: 13, color: "#C9D5E2" }}>{language.versionSummary}</p>
             )}
             {considered.length > 0 && (
               <div style={{ marginTop: 10, fontSize: 13, color: "#C9D5E2" }}>
-                Names considered:{" "}
+                {t("generation.hero.names_considered")}{" "}
                 <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", verticalAlign: "middle" }}>
                   {considered.map((c) => (
                     <span key={c.name} className="chip" style={{ background: "rgba(255,255,255,0.12)", color: "#fff", borderColor: "transparent" }}>{c.name}</span>
@@ -256,16 +257,16 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
             )}
             <div className="actions">
               <Link to="/app/dictionary" className="btn btn-outline" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }}>
-                Open Dictionary
+                {t("generation.hero.open_dictionary")}
               </Link>
               <Link to="/app/grammar" className="btn btn-outline" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }}>
-                Open Grammar Workspace
+                {t("generation.hero.open_grammar")}
               </Link>
               <Link to="/app/practice" className="btn btn-outline" style={{ textDecoration: "none", background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }}>
-                Practice
+                {t("generation.hero.practice")}
               </Link>
               <button type="button" className="btn btn-outline" style={{ background: "rgba(255,255,255,0.1)", color: "#fff", borderColor: "transparent" }} onClick={exportCsv} disabled={exporting}>
-                {exporting ? "Preparing…" : "Export"}
+                {exporting ? t("generation.export.preparing") : t("common.export")}
               </button>
             </div>
           </div>
@@ -281,7 +282,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
 
           {language.warnings.length > 0 && (
             <div className="card" style={{ marginTop: 16 }}>
-              <h3>Consistency notes from the last generation</h3>
+              <h3>{t("generation.warnings.title")}</h3>
               <ul style={{ margin: 0, paddingLeft: 20, color: "var(--text-muted)", fontSize: 14 }}>
                 {language.warnings.map((w, i) => (
                   <li key={i}>{w}</li>
@@ -293,24 +294,24 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
           {grammar && (
             <div className="card" style={{ marginTop: 16 }}>
               <div className="card-title">
-                <h3>Grammar & sound rules</h3>
+                <h3>{t("generation.grammar.title")}</h3>
                 <span className="bilingual">
-                  {grammar.rules.length} rules · {grammar.exampleSentences.length} example sentences
+                  {t("generation.grammar.counts", { rules: grammar.rules.length, sentences: grammar.exampleSentences.length })}
                 </span>
               </div>
               <p className="bilingual" style={{ marginBottom: 4 }}>
-                Syllable rules: {grammar.phonology.syllableStructures.join(", ")}
+                {t("generation.grammar.syllable")} {grammar.phonology.syllableStructures.join(", ")}
               </p>
               {grammar.affixes && (
                 <p className="bilingual" style={{ marginBottom: 4 }}>
-                  Inflectional affixes: plural <code>-{grammar.affixes.plural}</code>, past <code>-{grammar.affixes.past}</code>, question <code>-{grammar.affixes.question}</code> … all seven live in the workspace.
+                  {t("generation.grammar.affixes_line", { plural: grammar.affixes.plural, past: grammar.affixes.past, question: grammar.affixes.question })}
                 </p>
               )}
               <p className="bilingual" style={{ marginBottom: 10 }}>
-                The full rulebook — sound inventory, word order, every rule with bilingual explanations, editable — has its own page now.
+                {t("generation.grammar.full_rulebook")}
               </p>
               <Link to="/app/grammar" className="btn btn-primary" style={{ textDecoration: "none" }}>
-                Open Grammar Workspace
+                {t("generation.hero.open_grammar")}
               </Link>
             </div>
           )}
@@ -320,29 +321,29 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
       {versions.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-title">
-            <h3>Versions</h3>
-            <span className="bilingual">Restoring creates a new version, nothing is overwritten.</span>
+            <h3>{t("generation.versions.title")}</h3>
+            <span className="bilingual">{t("generation.versions.note")}</span>
           </div>
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Version</th>
-                  <th>Summary</th>
-                  <th>Created</th>
-                  <th>Actions</th>
+                  <th>{t("generation.versions.column_version")}</th>
+                  <th>{t("generation.versions.column_summary")}</th>
+                  <th>{t("generation.versions.column_created")}</th>
+                  <th>{t("generation.versions.column_actions")}</th>
                 </tr>
               </thead>
               <tbody>
                 {versions.map((v) => (
                   <tr key={v.version}>
-                    <td><strong>v{v.version}</strong>{v.version === language?.version && <span className="bilingual"> (current)</span>}</td>
+                    <td><strong>v{v.version}</strong>{v.version === language?.version && <span className="bilingual"> {t("generation.versions.current")}</span>}</td>
                     <td>{v.change_summary}</td>
                     <td className="bilingual">{formatWhen(v.created_at)}</td>
                     <td>
                       <div style={{ display: "flex", gap: 8 }}>
                         {versions.length > 1 && (
-                          <Button variant="outline" size="sm" onClick={() => openCompare(v.version)}>Compare</Button>
+                          <Button variant="outline" size="sm" onClick={() => openCompare(v.version)}>{t("generation.versions.compare")}</Button>
                         )}
                         {canEdit && v.version !== language?.version && (
                           <RestoreButton workspaceId={workspace.id} version={v.version} onDone={async () => {
@@ -388,9 +389,9 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
 
       {regenConfirm && (
         <ConfirmDialog
-          title="Generate a new version?"
-          body={`A new version of "${language?.name}" will be created from your current dictionary. Vocabulary or grammar may change; your previous versions stay available for rollback.`}
-          confirmLabel="Generate new version"
+          title={t("generation.regen.title")}
+          body={t("generation.regen.body", { name: language?.name ?? "" })}
+          confirmLabel={t("generation.regen.confirm")}
           onConfirm={() => {
             setRegenConfirm(false);
             setGenOpen(true);
@@ -406,7 +407,7 @@ export function MyLanguage({ workspace }: { workspace: Workspace }) {
           onClose={() => setRenameOpen(false)}
           onRenamed={async (name) => {
             setRenameOpen(false);
-            toast.success(`Renamed to "${name}".`);
+            toast.success(t("generation.rename.toast", { name }));
             await load();
           }}
         />
@@ -461,7 +462,7 @@ function GenerateDialog({
       toast.success(res.message);
       setEmptyDictionary(false);
     } catch (err) {
-      setError(describeApiError(err, "Could not add the starter dictionary"));
+      setError(describeApiError(err, t("generation.starter.error")));
     } finally {
       setBusy(false);
     }
@@ -492,19 +493,19 @@ function GenerateDialog({
     } catch (err) {
       if (err instanceof ApiError && err.details === "dictionary_empty") {
         setEmptyDictionary(true);
-        setError("Your dictionary is empty, so there is nothing to generate a language from yet.");
+        setError(t("generation.dialog.empty_dictionary"));
       } else {
-        setError(describeApiError(err, "Generation could not start"));
+        setError(describeApiError(err, t("generation.dialog.start_error")));
       }
       setBusy(false);
     }
   };
 
   return (
-    <Modal title={hasLanguage ? "Generate a new version" : "Generate your language"} onClose={onClose}>
+    <Modal title={hasLanguage ? t("generation.dialog.title_regen") : t("generation.dialog.title_new")} onClose={onClose}>
       {hasLanguage && (
         <HonestNote>
-          The new version is built from your current dictionary. Your previous version stays available under Versions.
+          {t("generation.dialog.honest_note")}
         </HonestNote>
       )}
       {/* Setup summary (design.md §8): what the language will be built from. */}
@@ -512,15 +513,17 @@ function GenerateDialog({
         <p style={{ margin: "0 0 4px", fontSize: 14 }}><strong>{workspaceName}</strong></p>
         <p className="bilingual" style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>
           {dictionaryCount === null
-            ? "Dictionary entries: loading…"
-            : `${dictionaryCount} dictionary ${dictionaryCount === 1 ? "entry" : "entries"} will be mapped into the language.`}
+            ? t("generation.dialog.entries_loading")
+            : dictionaryCount === 1
+              ? t("generation.dialog.entries_one")
+              : t("generation.dialog.entries_many", { count: dictionaryCount })}
         </p>
       </div>
       <form onSubmit={submit} noValidate>
-        <Field label="Preferred name (optional)" hint="Leave empty and Lexora will invent one. If it's already taken by another workspace, you'll get a unique alternative.">
-          <Input value={preferredName} onChange={(e) => setPreferredName(e.target.value)} maxLength={40} placeholder="e.g. Nerava" />
+        <Field label={t("generation.dialog.name_label")} hint={t("generation.dialog.name_hint")}>
+          <Input value={preferredName} onChange={(e) => setPreferredName(e.target.value)} maxLength={40} placeholder={t("generation.dialog.name_placeholder")} />
         </Field>
-        <Field label="Style">
+        <Field label={t("generation.dialog.style_label")}>
           <Select value={style} onChange={(v) => setStyle(v)}>
             {GEN_STYLES.map((s) => (
               <option key={s} value={s}>
@@ -529,25 +532,25 @@ function GenerateDialog({
             ))}
           </Select>
         </Field>
-        <Field label="Reference languages">
+        <Field label={t("generation.dialog.refs_label")}>
           <Select value={referenceLangs} onChange={(v) => setReferenceLangs(v)}>
-            <option value="both">Bengali + English</option>
-            <option value="bengali">Bengali</option>
-            <option value="english">English</option>
+            <option value="both">{t("generation.dialog.refs_both")}</option>
+            <option value="bengali">{t("generation.dialog.refs_bengali")}</option>
+            <option value="english">{t("generation.dialog.refs_english")}</option>
           </Select>
         </Field>
         <ErrorNote message={error} />
         {emptyDictionary && (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
             <Button type="button" variant="outline" onClick={addStarterInline} disabled={busy}>
-              Add starter words
+              {t("generation.dialog.add_starter")}
             </Button>
-            <Link to="/app/dictionary?import=1" className="btn btn-outline" style={{ textDecoration: "none" }}>Import words</Link>
+            <Link to="/app/dictionary?import=1" className="btn btn-outline" style={{ textDecoration: "none" }}>{t("generation.dialog.import_words")}</Link>
           </div>
         )}
         <div className="modal-actions">
-          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" disabled={busy}>{busy ? "Starting…" : "Start generation"}</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>{t("common.cancel")}</Button>
+          <Button type="submit" disabled={busy}>{busy ? t("generation.dialog.starting") : t("generation.dialog.start")}</Button>
         </div>
       </form>
     </Modal>
@@ -575,18 +578,32 @@ function JobProgress({
     <div className="card" style={style} aria-live="polite">
       <div className="card-title">
         <h3>
-          {job.status === "completed" ? "Generation complete" : job.status === "failed" ? "Generation failed" : job.status === "cancelled" ? "Generation cancelled" : job.status === "timeout" ? "Generation timed out" : "Generating your language…"}
+          {job.status === "completed"
+            ? t("generation.job.title_done")
+            : job.status === "failed"
+              ? t("generation.job.title_failed")
+              : job.status === "cancelled"
+                ? t("generation.job.title_cancelled")
+                : job.status === "timeout"
+                  ? t("generation.job.title_timeout")
+                  : t("generation.job.title_running")}
         </h3>
         {job.status === "completed" && job.result && (
           <>
-            {notes.length > 0 && <Badge tone="amber">Completed with {notes.length} consistency {notes.length === 1 ? "note" : "notes"}</Badge>}
+            {notes.length > 0 && (
+              <Badge tone="amber">
+                {notes.length === 1
+                  ? t("generation.job.completed_notes_one", { count: notes.length })
+                  : t("generation.job.completed_notes_many", { count: notes.length })}
+              </Badge>
+            )}
             <Badge tone="green">v{job.result.version}</Badge>
           </>
         )}
       </div>
       {stale && (
         <HonestNote>
-          This job has not updated in a while. If the tab that started it was closed, it stopped where it was and will not finish on its own — you can cancel it and start again.
+          {t("generation.job.stale_note")}
         </HonestNote>
       )}
       {job.stages.length > 0 ? (
@@ -600,23 +617,23 @@ function JobProgress({
           ))}
         </ul>
       ) : (
-        <p className="bilingual">Starting the generation job…</p>
+        <p className="bilingual">{t("generation.job.starting_line")}</p>
       )}
       {job.status === "completed" && job.result && (
         <p style={{ marginTop: 12 }}>
-          <strong>{job.result.name}</strong> · {job.result.wordCount} words · {job.result.rulesCount} grammar rules ·{" "}
-          {job.result.generatedDrafts} generated drafts are waiting in your dictionary for review.{" "}
-          <Link to={`/app/dictionary?status=draft`}>Review {job.result.generatedDrafts} drafts</Link>
+          <strong>{job.result.name}</strong> ·{" "}
+          {t("generation.job.result_line", { words: job.result.wordCount, rules: job.result.rulesCount, drafts: job.result.generatedDrafts })}{" "}
+          <Link to={`/app/dictionary?status=draft`}>{t("generation.job.review_link", { count: job.result.generatedDrafts })}</Link>
         </p>
       )}
       {job.error && <ErrorNote message={job.error} />}
       {(live || onRetry) && (
         <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
           {live && onCancel && (
-            <Button variant="outline" size="sm" onClick={onCancel}>Cancel generation</Button>
+            <Button variant="outline" size="sm" onClick={onCancel}>{t("generation.job.cancel")}</Button>
           )}
           {!live && onRetry && job.status !== "completed" && (
-            <Button variant="outline" size="sm" onClick={onRetry}>Try again</Button>
+            <Button variant="outline" size="sm" onClick={onRetry}>{t("generation.job.try_again")}</Button>
           )}
         </div>
       )}
@@ -656,7 +673,7 @@ function CompareModal({
         if (alive) setData(d);
       })
       .catch((err) => {
-        if (alive) setError(describeApiError(err, "Compare failed"));
+        if (alive) setError(describeApiError(err, t("generation.compare.failed")));
       });
     return () => {
       alive = false;
@@ -664,20 +681,20 @@ function CompareModal({
   }, [a, b, workspaceId]);
 
   const cap = (list: unknown[], slice: number): string =>
-    list.length > slice ? ` (+${list.length - slice} more)` : "";
+    list.length > slice ? t("generation.compare.more", { count: list.length - slice }) : "";
 
   return (
-    <Modal title="Compare versions" onClose={onClose}>
+    <Modal title={t("generation.compare.title")} onClose={onClose}>
       <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-        <Field label="From">
-          <Select value={String(a)} onChange={(v) => setA(Number(v))} aria-label="From version">
+        <Field label={t("common.from")}>
+          <Select value={String(a)} onChange={(v) => setA(Number(v))} aria-label={t("generation.compare.from_aria")}>
             {sorted.map((v) => (
               <option key={v.version} value={v.version}>v{v.version}</option>
             ))}
           </Select>
         </Field>
-        <Field label="To">
-          <Select value={String(b)} onChange={(v) => setB(Number(v))} aria-label="To version">
+        <Field label={t("common.to")}>
+          <Select value={String(b)} onChange={(v) => setB(Number(v))} aria-label={t("generation.compare.to_aria")}>
             {sorted.map((v) => (
               <option key={v.version} value={v.version}>v{v.version}</option>
             ))}
@@ -688,17 +705,17 @@ function CompareModal({
       {data && (
         <div>
           <p style={{ marginTop: 0 }}>
-            <strong>v{data.from.version} → v{data.to.version}</strong> · <span className="bilingual">{data.diff.summary}</span>
+            <strong>{t("generation.compare.versions_line", { from: data.from.version, to: data.to.version })}</strong> · <span className="bilingual">{data.diff.summary}</span>
           </p>
           {data.diff.nameChanged && (
-            <p className="bilingual">Name: {data.diff.fromName} → <strong>{data.diff.toName}</strong></p>
+            <p className="bilingual">{t("generation.compare.name", { from: data.diff.fromName })} <strong>{data.diff.toName}</strong></p>
           )}
           {data.diff.wordOrderChanged && (
-            <p className="bilingual">Word order: {data.diff.fromWordOrder} → <strong>{data.diff.toWordOrder}</strong></p>
+            <p className="bilingual">{t("generation.compare.word_order", { from: data.diff.fromWordOrder })} <strong>{data.diff.toWordOrder}</strong></p>
           )}
           {data.diff.rulesAdded.length > 0 && (
             <div style={{ marginBottom: 8 }}>
-              <h4 style={{ margin: "10px 0 4px" }}>Rules added</h4>
+              <h4 style={{ margin: "10px 0 4px" }}>{t("generation.compare.rules_added")}</h4>
               {data.diff.rulesAdded.slice(0, 20).map((r) => (
                 <p key={r.id} style={{ margin: "2px 0", fontSize: 13 }}>+ {r.name} <span className="bilingual" style={{ color: "var(--text-muted)" }}>· {r.category}</span></p>
               ))}
@@ -707,7 +724,7 @@ function CompareModal({
           )}
           {data.diff.rulesRemoved.length > 0 && (
             <div style={{ marginBottom: 8 }}>
-              <h4 style={{ margin: "10px 0 4px" }}>Rules removed</h4>
+              <h4 style={{ margin: "10px 0 4px" }}>{t("generation.compare.rules_removed")}</h4>
               {data.diff.rulesRemoved.slice(0, 20).map((r) => (
                 <p key={r.id} style={{ margin: "2px 0", fontSize: 13 }}>− {r.name} <span className="bilingual" style={{ color: "var(--text-muted)" }}>· {r.category}</span></p>
               ))}
@@ -716,7 +733,7 @@ function CompareModal({
           )}
           {data.diff.rulesChanged.length > 0 && (
             <div style={{ marginBottom: 8 }}>
-              <h4 style={{ margin: "10px 0 4px" }}>Rules updated</h4>
+              <h4 style={{ margin: "10px 0 4px" }}>{t("generation.compare.rules_updated")}</h4>
               {data.diff.rulesChanged.slice(0, 20).map((r) => (
                 <p key={r.after.id} style={{ margin: "2px 0", fontSize: 13 }}>~ {r.after.name}</p>
               ))}
@@ -725,7 +742,7 @@ function CompareModal({
           )}
           {(data.diff.vocabAdded.length > 0 || data.diff.vocabRemoved.length > 0) && (
             <div style={{ marginBottom: 8 }}>
-              <h4 style={{ margin: "10px 0 4px" }}>Vocabulary</h4>
+              <h4 style={{ margin: "10px 0 4px" }}>{t("generation.compare.vocabulary")}</h4>
               {data.diff.vocabAdded.slice(0, 20).map((v) => (
                 <span key={"add" + v.word} className="chip" style={{ marginRight: 6 }}>+ {v.word}</span>
               ))}
@@ -739,7 +756,7 @@ function CompareModal({
           )}
           {(data.diff.newWarnings.length > 0 || data.diff.resolvedWarnings.length > 0) && (
             <div>
-              <h4 style={{ margin: "10px 0 4px" }}>Consistency notes</h4>
+              <h4 style={{ margin: "10px 0 4px" }}>{t("generation.compare.notes")}</h4>
               {data.diff.newWarnings.slice(0, 10).map((w, i) => (
                 <p key={"nw" + i} style={{ margin: "2px 0", fontSize: 13 }}>+ {w}</p>
               ))}
@@ -750,7 +767,7 @@ function CompareModal({
           )}
         </div>
       )}
-      {!data && !error && <p className="bilingual">Comparing…</p>}
+      {!data && !error && <p className="bilingual">{t("common.comparing")}</p>}
     </Modal>
   );
 }
@@ -769,7 +786,7 @@ function RestoreButton({ workspaceId, version, onDone }: { workspaceId: string; 
       setConfirm(false);
       await onDone();
     } catch (err) {
-      toast.error(describeApiError(err, "Restore failed"));
+      toast.error(describeApiError(err, t("generation.restore.failed")));
     } finally {
       setBusy(false);
     }
@@ -778,13 +795,13 @@ function RestoreButton({ workspaceId, version, onDone }: { workspaceId: string; 
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setConfirm(true)}>
-        Restore
+        {t("generation.versions.restore")}
       </Button>
       {confirm && (
         <ConfirmDialog
-          title={`Restore version ${version}?`}
-          body={`Version ${version} will come back as a new version; the current one is kept in history.`}
-          confirmLabel="Restore"
+          title={t("generation.restore.confirm_title", { version })}
+          body={t("generation.restore.confirm_body", { version })}
+          confirmLabel={t("generation.restore.confirm_label")}
           onConfirm={doRestore}
           onCancel={() => setConfirm(false)}
           busy={busy}
@@ -807,22 +824,22 @@ function RenameDialog({ workspaceId, current, onClose, onRenamed }: { workspaceI
       await api.patch(`/api/ws/${workspaceId}/language`, { name });
       await onRenamed(name);
     } catch (err) {
-      setError(describeApiError(err, "Rename failed"));
+      setError(describeApiError(err, t("generation.rename.failed")));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal title="Rename language" onClose={onClose}>
+    <Modal title={t("generation.rename.title")} onClose={onClose}>
       <form onSubmit={submit} noValidate>
-        <Field label="Language name" hint="Names are unique across all of Lexora.">
+        <Field label={t("generation.rename.label")} hint={t("generation.rename.hint")}>
           <Input value={name} onChange={(e) => setName(e.target.value)} minLength={2} maxLength={40} required autoFocus />
         </Field>
         <ErrorNote message={error} />
         <div className="modal-actions">
-          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="submit" disabled={busy || name.trim() === current}>{busy ? "Renaming…" : "Rename"}</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>{t("common.cancel")}</Button>
+          <Button type="submit" disabled={busy || name.trim() === current}>{busy ? t("generation.rename.busy") : t("generation.action.rename")}</Button>
         </div>
       </form>
     </Modal>

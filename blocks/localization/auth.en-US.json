@@ -1,0 +1,12 @@
+{
+  "signin.title": "Sign in",
+  "signin.sso_body": "Use your organisation's SELISE Blocks account; there is no separate Lexora password.",
+  "signin.sso_button": "Sign in with Blocks SSO",
+  "signin.not_configured": "SSO is not configured. Set VITE_BLOCKS_OIDC_CLIENT_ID in .env.",
+  "signin.signed_in_as": "You are signed in to Blocks as",
+  "signin.fallback_user": "a Blocks user",
+  "signin.continue": "Continue to the app",
+  "signin.entering": "Entering…",
+  "signin.start_failed": "Could not start SSO sign-in.",
+  "signin.complete_failed": "Could not complete sign-in."
+}

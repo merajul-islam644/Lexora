@@ -7,6 +7,7 @@ import { useBlocksAuth } from "../blocks-auth.js";
 import { blocksClient } from "../lib/blocks/client.js";
 import { api } from "../api.js";
 import { describeApiError } from "../errors.js";
+import { t } from "../i18n/index.js";
 
 const ROLE_TONE = { owner: "teal", admin: "violet", editor: "amber", viewer: "gray" } as const;
 
@@ -70,11 +71,11 @@ export function Profile() {
     if (!file) return;
     setAvatarError(null);
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setAvatarError("Please choose a PNG, JPEG or WebP image.");
+      setAvatarError(t("profile.avatar.bad_type"));
       return;
     }
     if (file.size > MAX_AVATAR_BYTES) {
-      setAvatarError("Image must be 5 MB or smaller.");
+      setAvatarError(t("profile.avatar.bad_size"));
       return;
     }
     void (async () => {
@@ -91,9 +92,9 @@ export function Profile() {
         await api.patch("/api/me/avatar", { fileId: presign.fileId });
         const fresh = await api.get<{ downloadUrl: string | null }>("/api/me/avatar");
         setAvatarUrl(fresh.downloadUrl);
-        toast.success("Profile photo updated.");
+        toast.success(t("profile.avatar.toast_updated"));
       } catch (e) {
-        setAvatarError(describeApiError(e, "Could not upload the photo."));
+        setAvatarError(describeApiError(e, t("profile.avatar.upload_error")));
       } finally {
         setUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
@@ -108,9 +109,9 @@ export function Profile() {
       try {
         await api.del("/api/me/avatar");
         setAvatarUrl(null);
-        toast("Profile photo removed.");
+        toast(t("profile.avatar.toast_removed"));
       } catch (e) {
-        setAvatarError(describeApiError(e, "Could not remove the photo."));
+        setAvatarError(describeApiError(e, t("profile.avatar.remove_error")));
       } finally {
         setUploading(false);
       }
@@ -118,7 +119,7 @@ export function Profile() {
   };
 
   const claims = blocks.claims as { name?: string; preferred_username?: string } | undefined;
-  const displayName = user.name || claims?.name || user.email.split("@")[0] || "You";
+  const displayName = user.name || claims?.name || user.email.split("@")[0] || t("common.you");
   const memberSince = user.createdAt
     ? new Date(user.createdAt).toLocaleDateString(undefined, {
         year: "numeric", month: "long", day: "numeric"
@@ -127,14 +128,14 @@ export function Profile() {
 
   return (
     <div>
-      <PageHeader title="Profile" subtitle="Your account: who you are in this app." />
+      <PageHeader title={t("profile.title")} subtitle={t("profile.subtitle")} />
 
       <div className="profile-page">
         {/* Identity */}
         <div className="card">
           <div className="profile-head">
             {avatarUrl ? (
-              <img className="profile-avatar profile-avatar-img" src={avatarUrl} alt="Your profile" />
+              <img className="profile-avatar profile-avatar-img" src={avatarUrl} alt={t("profile.avatar.alt")} />
             ) : (
               <div className="profile-avatar" aria-hidden="true">
                 {initialsOf(displayName)}
@@ -145,9 +146,9 @@ export function Profile() {
               <div style={{ color: "var(--text-muted)", wordBreak: "break-all", marginBottom: 6 }}>{user.email}</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {user.emailVerified
-                  ? <Badge tone="green">Verified</Badge>
-                  : <Badge tone="amber">Verification pending</Badge>}
-                <Badge tone="navy">SELISE Blocks SSO</Badge>
+                  ? <Badge tone="green">{t("profile.avatar.verified")}</Badge>
+                  : <Badge tone="amber">{t("profile.avatar.pending")}</Badge>}
+                <Badge tone="navy">{t("profile.avatar.sso_badge")}</Badge>
               </div>
             </div>
           </div>
@@ -166,11 +167,11 @@ export function Profile() {
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
             >
-              {uploading ? "Working…" : avatarUrl ? "Change photo" : "Upload photo"}
+              {uploading ? t("common.working") : avatarUrl ? t("profile.avatar.change") : t("profile.avatar.upload")}
             </button>
             {avatarUrl && (
               <button type="button" className="btn btn-outline btn-sm" disabled={uploading} onClick={removeAvatar}>
-                Remove
+                {t("profile.avatar.remove")}
               </button>
             )}
             {uploading && <Spinner />}
@@ -179,12 +180,12 @@ export function Profile() {
 
           <div className="profile-rows" style={{ marginTop: 16 }}>
             <div className="profile-row">
-              <span>Member since</span>
+              <span>{t("profile.rows.member_since")}</span>
               <span>{memberSince}</span>
             </div>
             {claims?.preferred_username && (
               <div className="profile-row">
-                <span>Blocks account</span>
+                <span>{t("profile.rows.blocks_account")}</span>
                 <span style={{ wordBreak: "break-all" }}>{String(claims.preferred_username)}</span>
               </div>
             )}
@@ -193,9 +194,9 @@ export function Profile() {
 
         {/* Platform roles & permissions — live from IAM */}
         <div className="card">
-          <h3 className="card-section-title">Platform roles & permissions</h3>
+          <h3 className="card-section-title">{t("profile.iam.title")}</h3>
           <p className="card-section-sub">
-            What the SELISE Blocks platform says about your account, read live from IAM.
+            {t("profile.iam.subtitle")}
           </p>
           {iam !== null ? (
             <>
@@ -204,14 +205,16 @@ export function Profile() {
                   iam.roles.map((role) => <Badge key={role} tone="navy">{role}</Badge>)
                 ) : (
                   <span className="bilingual" style={{ color: "var(--text-muted)", fontSize: 13 }}>
-                    No platform roles assigned.
+                    {t("profile.iam.no_roles")}
                   </span>
                 )}
               </div>
               {iam.permissions.length > 0 && (
                 <>
                   <div className="card-section-sub" style={{ margin: "4px 0 6px" }}>
-                    {iam.permissions.length} {iam.permissions.length === 1 ? "permission" : "permissions"} granted through your roles:
+                    {iam.permissions.length === 1
+                      ? t("profile.iam.permissions_line_one", { count: iam.permissions.length })
+                      : t("profile.iam.permissions_line_many", { count: iam.permissions.length })}
                   </div>
                   <div className="perm-grid">
                     {iam.permissions.map((perm) => (
@@ -225,19 +228,19 @@ export function Profile() {
             </>
           ) : iamFailed ? (
             <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>
-              Couldn't load your platform roles right now.
+              {t("profile.iam.failed")}
             </p>
           ) : (
-            <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>Loading…</p>
+            <p className="bilingual" style={{ margin: 0, color: "var(--text-muted)" }}>{t("common.loading")}…</p>
           )}
         </div>
 
         {/* Workspaces — the app's own domain roles */}
         <div className="card">
-          <h3 className="card-section-title">Your workspaces</h3>
+          <h3 className="card-section-title">{t("profile.ws.title")}</h3>
           <p className="card-section-sub">
-            {workspaces.length === 1 ? "1 workspace" : `${workspaces.length} workspaces`}; your role here decides what
-            you can change, re-checked on every call in the app's data layer.
+            {workspaces.length === 1 ? t("profile.ws.subtitle_one") : t("profile.ws.subtitle_many", { count: workspaces.length })}
+            {t("profile.ws.subtitle_tail")}
           </p>
           <div className="profile-rows">
             {workspaces.map((ws) => {
@@ -251,26 +254,26 @@ export function Profile() {
                       <Badge tone={ROLE_TONE[ws.role]}>{ws.role}</Badge>
                     </div>
                     <div style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 2 }}>
-                      {ws.languageName ? `${ws.languageName} · ` : "No language yet · "}
-                      {ws.wordCount} {ws.wordCount === 1 ? "word" : "words"}
+                      {ws.languageName ? `${ws.languageName} · ` : `${t("profile.ws.no_language")} `}
+                      {ws.wordCount === 1 ? t("profile.ws.one_word") : t("profile.ws.many_words", { count: ws.wordCount })}
                     </div>
                   </div>
-                  <Link to="/app/dashboard" style={{ fontSize: 13, flexShrink: 0 }}>Open</Link>
+                  <Link to="/app/dashboard" style={{ fontSize: 13, flexShrink: 0 }}>{t("profile.ws.open")}</Link>
                 </div>
               );
             })}
             {workspaces.length === 0 && (
-              <EmptyState title="No workspaces yet" body="Create your first workspace from the dashboard to start building a language." />
+              <EmptyState title={t("profile.ws.empty_title")} body={t("profile.ws.empty_body")} />
             )}
           </div>
         </div>
 
         {/* Organizations (IAM) */}
         <div className="card">
-          <h3 className="card-section-title">Organizations</h3>
-          <p className="card-section-sub">Your memberships in the SELISE Blocks directory.</p>
+          <h3 className="card-section-title">{t("profile.org.title")}</h3>
+          <p className="card-section-sub">{t("profile.org.subtitle")}</p>
           {organizations.length === 0 && (
-            <EmptyState title="No organizations" body="Your account isn't listed in any SELISE Blocks organization yet." />
+            <EmptyState title={t("profile.org.empty_title")} body={t("profile.org.empty_body")} />
           )}
           {organizations.map((org) => (
             <div className="profile-row" key={org.id}>
@@ -284,9 +287,7 @@ export function Profile() {
 
         <HonestNote>
           <p style={{ margin: 0 }}>
-            Your account, platform roles, permissions and organizations are managed by your organisation's SELISE Blocks
-            directory; Lexora keeps no password and no editable profile. Workspace roles are Lexora's own and live in its
-            membership records. Sign-out ends the session on this device only.
+            {t("profile.note.text")}
           </p>
         </HonestNote>
       </div>

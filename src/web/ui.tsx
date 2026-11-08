@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { Toaster } from "sonner";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, Inbox, Loader2, X } from "lucide-react";
 import { THEME_EVENT, type Theme } from "./theme.js";
+import { t } from "./i18n/index.js";
 
 /* --------------------------------- buttons --------------------------------- */
 
@@ -277,27 +278,27 @@ export function Badge({ children, tone = "gray" }: { children: ReactNode; tone?:
 
 export function SourceBadge({ source }: { source: string }) {
   const map: Record<string, { tone: "teal" | "violet" | "gray"; label: string }> = {
-    user: { tone: "teal", label: "Your word" },
-    generated: { tone: "violet", label: "Generated draft" },
-    imported: { tone: "gray", label: "Imported" }
+    user: { tone: "teal", label: "common.source_user" },
+    generated: { tone: "violet", label: "common.source_generated" },
+    imported: { tone: "gray", label: "common.source_imported" }
   };
   const item = map[source] ?? { tone: "gray" as const, label: source };
-  return <Badge tone={item.tone}>{item.label}</Badge>;
+  return <Badge tone={item.tone}>{item.label.startsWith("common.") ? t(item.label) : item.label}</Badge>;
 }
 
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { tone: "green" | "amber" | "gray" | "red"; label: string }> = {
-    approved: { tone: "green", label: "Approved" },
-    draft: { tone: "amber", label: "Draft" },
-    active: { tone: "green", label: "Active" },
-    archived: { tone: "gray", label: "Archived" },
-    remembered: { tone: "green", label: "Remembered" },
-    learning: { tone: "amber", label: "Learning" },
-    needs_revision: { tone: "red", label: "Needs revision" },
-    new: { tone: "gray", label: "New" }
+    approved: { tone: "green", label: "common.status_approved" },
+    draft: { tone: "amber", label: "common.status_draft" },
+    active: { tone: "green", label: "common.status_active" },
+    archived: { tone: "gray", label: "common.status_archived" },
+    remembered: { tone: "green", label: "common.status_remembered" },
+    learning: { tone: "amber", label: "common.status_learning" },
+    needs_revision: { tone: "red", label: "common.status_needs_revision" },
+    new: { tone: "gray", label: "common.status_new" }
   };
   const item = map[status] ?? { tone: "gray" as const, label: status };
-  return <Badge tone={item.tone}>{item.label}</Badge>;
+  return <Badge tone={item.tone}>{item.label.startsWith("common.") ? t(item.label) : item.label}</Badge>;
 }
 
 /* ---------------------------------- modal ----------------------------------- */
@@ -367,7 +368,7 @@ export function Modal({
       <div ref={panelRef} className={`modal ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         <div className="card-title">
           <h2>{title}</h2>
-          <Button variant="ghost" size="sm" className="btn-icon" onClick={onClose} aria-label="Close dialog">
+          <Button variant="ghost" size="sm" className="btn-icon" onClick={onClose} aria-label={t("common.close_dialog")}>
             <X size={16} />
           </Button>
         </div>
@@ -402,10 +403,10 @@ export function ConfirmDialog({
       actions={
         <>
           <Button variant="outline" onClick={onCancel} disabled={busy}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button variant={danger ? "danger" : "primary"} onClick={onConfirm} disabled={busy}>
-            {busy ? "Working…" : confirmLabel}
+            {busy ? t("common.working") : confirmLabel}
           </Button>
         </>
       }
@@ -418,7 +419,7 @@ export function ConfirmDialog({
 /* ---------------------------------- misc ------------------------------------ */
 
 export function Spinner() {
-  return <div className="spinner" role="status" aria-label="Loading" />;
+  return <div className="spinner" role="status" aria-label={t("common.loading")} />;
 }
 
 /* Page-level wait (session boot, auth guard): fills the viewport and centers

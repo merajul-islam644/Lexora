@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { BookOpen, Eye, KeyRound, Languages, Lock, Sparkles, Users } from "lucide-react";
+import { t } from "../i18n/index.js";
 
 /* Header/footer come from the route-level <PublicLayout /> in main.tsx --
    these pages render their sections only. */
@@ -7,37 +8,36 @@ export function Landing() {
   return (
     <>
       <section className="hero">
-        <span className="eyebrow">A private language for your business</span>
-        <h1>Invent a language your team actually owns.</h1>
+        <span className="eyebrow">{t("landing.hero.eyebrow")}</span>
+        <h1>{t("landing.hero.title")}</h1>
         <p className="lead">
-          Lexora turns your company's own word list (with Bengali and English references kept side by side)
-          into a complete constructed language: sounds, words, grammar and example sentences you can review and revise.
+          {t("landing.hero.lead")}
         </p>
         <div className="hero-actions">
-          <Link to="/signup" className="btn btn-primary btn-lg" style={{ textDecoration: "none" }}>Create your language</Link>
-          <Link to="/features" className="btn btn-outline btn-lg" style={{ textDecoration: "none" }}>See how it works</Link>
+          <Link to="/signup" className="btn btn-primary btn-lg" style={{ textDecoration: "none" }}>{t("landing.hero.cta_create")}</Link>
+          <Link to="/features" className="btn btn-outline btn-lg" style={{ textDecoration: "none" }}>{t("landing.hero.cta_how")}</Link>
         </div>
       </section>
 
       <section className="section">
         <div className="section-title">
-          <h2>How it works</h2>
+          <h2>{t("landing.how.title")}</h2>
         </div>
         <div className="grid-3">
           <div className="feature-card">
             <div className="icon-box"><BookOpen size={20} /></div>
-            <h3>1. Build your dictionary</h3>
-            <p>Add words one by one or import a CSV. Every word keeps its বাংলা and English meaning as reference.</p>
+            <h3>{t("landing.how.step1_title")}</h3>
+            <p>{t("landing.how.step1_body")}</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><Sparkles size={20} /></div>
-            <h3>2. Generate the language</h3>
-            <p>Lexora designs a sound system, maps every concept to a new word, and writes grammar rules, explained in English and Bengali.</p>
+            <h3>{t("landing.how.step2_title")}</h3>
+            <p>{t("landing.how.step2_body")}</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><Languages size={20} /></div>
-            <h3>3. Use it with your team</h3>
-            <p>Draft translations, coin new words consistently, and practice until the language feels natural.</p>
+            <h3>{t("landing.how.step3_title")}</h3>
+            <p>{t("landing.how.step3_body")}</p>
           </div>
         </div>
       </section>
@@ -46,18 +46,16 @@ export function Landing() {
         <div className="grid-2">
           <div className="feature-card">
             <div className="icon-box"><Eye size={20} /></div>
-            <h3>You review everything</h3>
+            <h3>{t("landing.review.title")}</h3>
             <p>
-              Generated words arrive as drafts, translations are marked draft, and every grammar rule explains itself.
-              Nothing is presented as more than it is.
+              {t("landing.review.body")}
             </p>
           </div>
           <div className="feature-card violet">
             <div className="icon-box"><Users size={20} /></div>
-            <h3>Private to your workspace</h3>
+            <h3>{t("landing.private.title")}</h3>
             <p>
-              Each workspace has its own dictionary and language, isolated on the server. Members see only what their
-              role allows: viewer, editor, admin, owner.
+              {t("landing.private.body")}
             </p>
           </div>
         </div>
@@ -70,40 +68,40 @@ export function Features() {
   return (
     <>
       <section className="hero" style={{ paddingBottom: 24 }}>
-        <span className="eyebrow">Features</span>
-        <h1>Everything a private language needs</h1>
+        <span className="eyebrow">{t("landing.features.eyebrow")}</span>
+        <h1>{t("landing.features.title")}</h1>
       </section>
       <section className="section" style={{ paddingTop: 0 }}>
         <div className="grid-3">
           <div className="feature-card">
             <div className="icon-box"><BookOpen size={20} /></div>
-            <h3>Dictionary</h3>
-            <p>Bilingual references, pronunciation guides, roots and mnemonics. Search, filter, import and export (CSV/JSON).</p>
+            <h3>{t("landing.features.dictionary_title")}</h3>
+            <p>{t("landing.features.dictionary_body")}</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><Sparkles size={20} /></div>
-            <h3>Language generation</h3>
-            <p>Phonology, vocabulary mapping, grammar rules and example sentences, generated stage by stage, versioned and reversible.</p>
+            <h3>{t("landing.features.generation_title")}</h3>
+            <p>{t("landing.features.generation_body")}</p>
           </div>
           <div className="feature-card violet">
             <div className="icon-box"><Languages size={20} /></div>
-            <h3>Translation Lab</h3>
-            <p>Rule-based drafts built from your own dictionary, with word-by-word mapping. Honest about what it can't translate.</p>
+            <h3>{t("landing.features.translation_title")}</h3>
+            <p>{t("landing.features.translation_body")}</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><BookOpen size={20} /></div>
-            <h3>Word Builder</h3>
-            <p>Coin new words that follow your language's sound rules and derivation patterns, with collision checks.</p>
+            <h3>{t("landing.features.wordbuilder_title")}</h3>
+            <p>{t("landing.features.wordbuilder_body")}</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><KeyRound size={20} /></div>
-            <h3>Practice & Revision</h3>
-            <p>Spaced repetition so the team actually remembers the words. You answer, it schedules. No shortcuts.</p>
+            <h3>{t("landing.features.practice_title")}</h3>
+            <p>{t("landing.features.practice_body")}</p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><Users size={20} /></div>
-            <h3>Roles & audit trail</h3>
-            <p>Owner, admin, editor, viewer. Every import, export and generation is logged in your workspace's activity log.</p>
+            <h3>{t("landing.features.roles_title")}</h3>
+            <p>{t("landing.features.roles_body")}</p>
           </div>
         </div>
       </section>
@@ -115,45 +113,38 @@ export function SecurityPage() {
   return (
     <>
       <section className="hero" style={{ paddingBottom: 24 }}>
-        <span className="eyebrow">Security & privacy</span>
-        <h1>Private by design, and honest about limits</h1>
-        <p className="lead">What Lexora protects, how, and what it explicitly does not do.</p>
+        <span className="eyebrow">{t("landing.security.eyebrow")}</span>
+        <h1>{t("landing.security.title")}</h1>
+        <p className="lead">{t("landing.security.lead")}</p>
       </section>
       <section className="section" style={{ paddingTop: 0 }}>
         <div className="grid-2">
           <div className="feature-card">
             <div className="icon-box"><Lock size={20} /></div>
-            <h3>Workspace isolation, enforced on every call</h3>
+            <h3>{t("landing.security.isolation_title")}</h3>
             <p>
-              Every read, write, search, export and generation is checked against your
-              membership before it runs: a workspace you don't belong to answers "not found",
-              so it can't even be probed for existence. Lexora runs without a server of its
-              own — the checks execute in the app's data layer with your own signed-in
-              token, and we document the limits of that model plainly instead of overstating them.
+              {t("landing.security.isolation_body")}
             </p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><KeyRound size={20} /></div>
-            <h3>Sign-in you already trust</h3>
+            <h3>{t("landing.security.sso_title")}</h3>
             <p>
-              There is no Lexora password. You sign in through your organisation's SELISE
-              Blocks SSO, and every data call carries your own signed-in identity — Lexora
-              never sees or stores a password, and it keeps no session cookies of its own.
+              {t("landing.security.sso_body")}
             </p>
           </div>
           <div className="feature-card">
             <div className="icon-box"><Eye size={20} /></div>
-            <h3>Full audit trail</h3>
-            <p>Imports, exports, generations and cancellations, renames, membership changes and deletions are recorded in your workspace's activity log — and the log outlives the workspace itself.</p>
+            <h3>{t("landing.security.audit_title")}</h3>
+            <p>{t("landing.security.audit_body")}</p>
           </div>
           <div className="feature-card" style={{ borderColor: "#F4D5B5" }}>
             <div className="icon-box" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}>
               <Eye size={20} />
             </div>
-            <h3>What a constructed language is not</h3>
+            <h3>{t("landing.security.not_title")}</h3>
             <p>
-              <strong>A constructed language is not encryption.</strong> Anyone who learns it can read it. Use Lexora to build
-              identity, culture and a fun private register, never to protect secrets, credentials or personal data.
+              <strong>{t("landing.security.not_strong")}</strong> {t("landing.security.not_body")}
             </p>
           </div>
         </div>

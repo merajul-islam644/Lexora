@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api, PARTS_OF_SPEECH, type GrammarData } from "../api.js";
 import { describeApiError } from "../errors.js";
 import { Badge, Button, EmptyState, ErrorNote, Field, LoadingScreen, PageHeader, Select, Textarea } from "../ui.js";
+import { t } from "../i18n/index.js";
 
 type Workspace = { id: string; name: string; role: string };
 
@@ -45,14 +46,17 @@ const EMPTY_FORM: RuleFormState = {
   validExamples: "",
 };
 
-const AFFIX_LABELS: Array<{ key: keyof NonNullable<GrammarData["affixes"]>; en: string; bn: string }> = [
-  { key: "plural", en: "Plural", bn: "বহুবচন" },
-  { key: "past", en: "Past tense", bn: "অতীত কাল" },
-  { key: "future", en: "Future tense", bn: "ভবিষ্যৎ কাল" },
-  { key: "negation", en: "Negation", bn: "না-বোধক" },
-  { key: "question", en: "Question", bn: "প্রশ্নবোধক" },
-  { key: "genitive", en: "Possessive", bn: "সম্পর্ক/অধিকরণ" },
-  { key: "formal", en: "Formal register", bn: "সম্মানসূচক" },
+/** English + Bengali labels for the seven inflectional affixes come from
+ * the grammar module's dictionaries: "grammar.affix.<key>" and
+ * "grammar.affix.<key>_bn". */
+const AFFIX_KEYS: Array<keyof NonNullable<GrammarData["affixes"]>> = [
+  "plural",
+  "past",
+  "future",
+  "negation",
+  "question",
+  "genitive",
+  "formal",
 ];
 
 export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
@@ -74,7 +78,7 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
     try {
       setGrammar(await api.get<GrammarData>(`/api/ws/${workspace.id}/language/grammar`));
     } catch (err) {
-      setError(describeApiError(err, "Could not load the grammar"));
+      setError(describeApiError(err, t("grammar.load.error")));
     } finally {
       setLoading(false);
     }
@@ -113,7 +117,7 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
       setForm(null);
       await load();
     } catch (err) {
-      setFormError(describeApiError(err, "Could not save the rule"));
+      setFormError(describeApiError(err, t("grammar.form.save_error")));
     } finally {
       setBusy(false);
     }
@@ -127,7 +131,7 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
       setConfirmDeleteId(null);
       await load();
     } catch (err) {
-      toast.error(describeApiError(err, "Could not remove the rule"));
+      toast.error(describeApiError(err, t("grammar.form.remove_error")));
       setConfirmDeleteId(null);
     } finally {
       setBusy(false);
@@ -139,21 +143,21 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
   if (error || !grammar) {
     return (
       <div className="grammar-page">
-        <PageHeader title="Grammar Workspace" subtitle="Your language's full grammar: sounds, word order, affixes, rules and examples." />
+        <PageHeader title={t("grammar.title")} subtitle={t("grammar.subtitle_empty")} />
         <ErrorNote message={error} />
         <div className="card">
           <EmptyState
             icon={<Sparkles size={28} />}
-            title="No grammar yet"
-            body="Generate your language first — its grammar rules, sound system and example sentences live here once it exists."
+            title={t("grammar.empty.title")}
+            body={t("grammar.empty.body")}
             action={
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
                 <Link to="/app/language" className="btn btn-primary" style={{ textDecoration: "none" }}>
-                  Go to My Language
+                  {t("grammar.empty.go_language")}
                 </Link>
                 {error && (
                   <Button variant="outline" onClick={() => void load()}>
-                    Retry
+                    {t("common.retry")}
                   </Button>
                 )}
               </div>
@@ -175,14 +179,14 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
   return (
     <div className="grammar-page">
       <PageHeader
-        title="Grammar Workspace"
-        subtitle={`${grammar.language.name} (${grammar.language.nativeName}) — the full rulebook: sounds, word order, affixes, rules and examples. Rule edits create a new version, nothing is silently overwritten.`}
+        title={t("grammar.title")}
+        subtitle={t("grammar.subtitle", { name: grammar.language.name, native: grammar.language.nativeName })}
       />
 
       <div className="grid-2">
         <div className="card">
           <div className="card-title">
-            <h2>Writing system</h2>
+            <h2>{t("grammar.writing.title")}</h2>
             <Badge tone="gray">{grammar.writingSystem.type}</Badge>
           </div>
           <p className="bilingual">{grammar.writingSystem.description}</p>
@@ -191,24 +195,24 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
               <span key={a} className="chip mono">{a}</span>
             ))}
           </div>
-          <p className="bilingual">Numerals: {grammar.writingSystem.numerals}</p>
+          <p className="bilingual">{t("grammar.writing.numerals")} {grammar.writingSystem.numerals}</p>
           <p className="bilingual">{grammar.writingSystem.capitalization}</p>
         </div>
 
         <div className="card">
           <div className="card-title">
-            <h2>Sound inventory</h2>
-            <Badge tone="violet">{grammar.language.wordOrder} word order</Badge>
+            <h2>{t("grammar.sounds.title")}</h2>
+            <Badge tone="violet">{t("grammar.sounds.word_order_badge", { order: grammar.language.wordOrder })}</Badge>
           </div>
-          <p className="bilingual" style={{ marginBottom: 4 }}>Consonants: {grammar.phonology.consonants.join(", ")}</p>
-          <p className="bilingual" style={{ marginBottom: 4 }}>Vowels: {grammar.phonology.vowels.join(", ")}</p>
+          <p className="bilingual" style={{ marginBottom: 4 }}>{t("grammar.sounds.consonants")} {grammar.phonology.consonants.join(", ")}</p>
+          <p className="bilingual" style={{ marginBottom: 4 }}>{t("grammar.sounds.vowels")} {grammar.phonology.vowels.join(", ")}</p>
           <p className="bilingual" style={{ marginBottom: 4 }}>
-            Syllable rules: <strong>{grammar.phonology.syllableStructures.join(", ")}</strong>
+            {t("grammar.sounds.syllable_rules")} <strong>{grammar.phonology.syllableStructures.join(", ")}</strong>
           </p>
           <p className="bilingual" style={{ marginBottom: 6 }}>{grammar.phonology.stressRule}</p>
           {grammar.phonology.forbiddenClusters.length > 0 && (
             <p className="bilingual">
-              Forbidden sound clusters:{" "}
+              {t("grammar.sounds.forbidden")}{" "}
               <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", verticalAlign: "middle" }}>
                 {grammar.phonology.forbiddenClusters.map((c) => (
                   <span key={c} className="chip mono" style={{ fontSize: 12 }}>{c}</span>
@@ -221,8 +225,8 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
-                    <th>Pronunciation</th>
+                    <th>{t("grammar.sounds.column_symbol")}</th>
+                    <th>{t("grammar.sounds.column_pronunciation")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -242,22 +246,22 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
       {grammar.affixes && (
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-title">
-            <h2>Inflectional affixes</h2>
-            <span className="bilingual">The seven endings every sentence leans on.</span>
+            <h2>{t("grammar.affixes.title")}</h2>
+            <span className="bilingual">{t("grammar.affixes.note")}</span>
           </div>
           <div className="table-wrap">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Function</th>
-                  <th>Affix</th>
-                  <th>Example</th>
+                  <th>{t("grammar.affixes.column_function")}</th>
+                  <th>{t("grammar.affixes.column_affix")}</th>
+                  <th>{t("grammar.affixes.column_example")}</th>
                 </tr>
               </thead>
               <tbody>
-                {AFFIX_LABELS.map(({ key, en, bn }) => (
+                {AFFIX_KEYS.map((key) => (
                   <tr key={key}>
-                    <td>{en} <span className="bn bilingual" lang="bn" style={{ color: "var(--text-muted)" }}>{bn}</span></td>
+                    <td>{t(`grammar.affix.${key}`)} <span className="bn bilingual" lang="bn" style={{ color: "var(--text-muted)" }}>{t(`grammar.affix.${key}_bn`)}</span></td>
                     <td>{grammar.affixes?.[key] ? <code>-{grammar.affixes[key]}</code> : <span className="bilingual" style={{ color: "var(--text-muted)" }}>—</span>}</td>
                     <td className="mono bilingual">
                       {grammar.affixes?.[key]
@@ -275,8 +279,8 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
       {(grammar.wordFormation.prefixes.length > 0 || grammar.wordFormation.suffixes.length > 0) && (
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-title">
-            <h2>Derivations (word formation)</h2>
-            <span className="bilingual">How new concepts grow from existing roots.</span>
+            <h2>{t("grammar.formation.title")}</h2>
+            <span className="bilingual">{t("grammar.formation.note")}</span>
           </div>
           <div className="chips">
             {grammar.wordFormation.prefixes.map((p) => (
@@ -291,10 +295,10 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="card-title">
-          <h2>Rules ({grammar.rules.length})</h2>
+          <h2>{t("grammar.rules.title", { count: grammar.rules.length })}</h2>
           {canEdit && form === null && (
             <Button onClick={() => { setForm({ ...EMPTY_FORM }); setFormError(null); }}>
-              <Plus size={15} /> Add a rule
+              <Plus size={15} /> {t("grammar.rules.add")}
             </Button>
           )}
         </div>
@@ -302,10 +306,10 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
         {form !== null && (
           <form className="card" style={{ margin: "10px 0", background: "var(--gray-soft, rgba(127,127,127,0.06))" }} onSubmit={submitRule} noValidate>
             <div className="form-row">
-              <Field label="Rule name">
+              <Field label={t("grammar.form.name_label")}>
                 <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={120} required />
               </Field>
-              <Field label="Category">
+              <Field label={t("grammar.form.category_label")}>
                 <input className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} maxLength={60} list="grammar-categories" required />
               </Field>
               <datalist id="grammar-categories">
@@ -314,27 +318,27 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
                 ))}
               </datalist>
             </div>
-            <Field label="Explanation (English)">
+            <Field label={t("grammar.form.explanation_en_label")}>
               <Textarea value={form.explanationEnglish} onChange={(e) => setForm({ ...form, explanationEnglish: e.target.value })} rows={3} maxLength={1200} required />
             </Field>
-            <Field label="Explanation (বাংলা)">
+            <Field label={t("grammar.form.explanation_bn_label")}>
               <Textarea value={form.explanationBengali} onChange={(e) => setForm({ ...form, explanationBengali: e.target.value })} rows={2} maxLength={1200} />
             </Field>
             <div className="form-row">
-              <Field label="Pattern" hint='e.g. "Subject + Object + Verb"'>
+              <Field label={t("grammar.form.pattern_label")} hint={t("grammar.form.pattern_hint")}>
                 <input className="input mono" value={form.pattern} onChange={(e) => setForm({ ...form, pattern: e.target.value })} maxLength={300} />
               </Field>
-              <Field label="Valid examples" hint="One per line, up to 6.">
+              <Field label={t("grammar.form.examples_label")} hint={t("grammar.form.examples_hint")}>
                 <Textarea value={form.validExamples} onChange={(e) => setForm({ ...form, validExamples: e.target.value })} rows={3} maxLength={1800} />
               </Field>
             </div>
             <ErrorNote message={formError} />
             <div style={{ display: "flex", gap: 10 }}>
               <Button type="submit" disabled={busy || form.name.trim().length < 2 || form.category.trim().length < 2 || form.explanationEnglish.trim().length < 3}>
-                {form.id ? "Save rule (new version)" : "Add rule (new version)"}
+                {form.id ? t("grammar.form.save_edit") : t("grammar.form.add")}
               </Button>
               <Button variant="outline" onClick={() => setForm(null)} disabled={busy}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             </div>
           </form>
@@ -359,7 +363,7 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
                   {rule.explanationBengali && <p className="bn bilingual" lang="bn">{rule.explanationBengali}</p>}
                   {rule.pattern && (
                     <p>
-                      Pattern: <code>{rule.pattern}</code>
+                      {t("grammar.rule.pattern")} <code>{rule.pattern}</code>
                     </p>
                   )}
                   {rule.validExamples.length > 0 && (
@@ -378,7 +382,9 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
                   ))}
                   {affected.length > 0 && (
                     <p className="bilingual" style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                      Seen in {affected.length} example sentence{affected.length === 1 ? "" : "s"} below.
+                      {affected.length === 1
+                        ? t("grammar.rule.seen_in", { count: affected.length })
+                        : t("grammar.rule.seen_in_plural", { count: affected.length })}
                     </p>
                   )}
                   {(canEdit || canDelete) && (
@@ -401,22 +407,22 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
                             setOpenId(rule.id);
                           }}
                         >
-                          <Pencil size={14} /> Edit
+                          <Pencil size={14} /> {t("common.edit")}
                         </Button>
                       )}
                       {canDelete &&
                         (confirmDeleteId === rule.id ? (
                           <>
                             <Button variant="danger" size="sm" onClick={() => void deleteRule(rule)} disabled={busy}>
-                              Confirm remove
+                              {t("common.confirm_remove")}
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => setConfirmDeleteId(null)}>
-                              Keep it
+                              {t("common.keep_it")}
                             </Button>
                           </>
                         ) : (
                           <Button variant="ghost" size="sm" onClick={() => setConfirmDeleteId(rule.id)}>
-                            <Trash2 size={14} /> Remove
+                            <Trash2 size={14} /> {t("common.remove")}
                           </Button>
                         ))}
                     </div>
@@ -431,13 +437,13 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
       {grammar.exampleSentences.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-title">
-            <h2>Example sentences ({grammar.exampleSentences.length})</h2>
+            <h2>{t("grammar.sentences.title", { count: grammar.exampleSentences.length })}</h2>
           </div>
           {grammar.exampleSentences.map((s) => (
             <div key={s.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--border, rgba(127,127,127,0.2))" }}>
               <p style={{ margin: 0 }}>
                 <strong>{s.constructed}</strong>{" "}
-                {s.reviewStatus === "draft" && <Badge tone="amber">Draft</Badge>}
+                {s.reviewStatus === "draft" && <Badge tone="amber">{t("grammar.sentences.draft_badge")}</Badge>}
               </p>
               <p className="bn bilingual" lang="bn" style={{ margin: "2px 0 0" }}>{s.bengali}</p>
               <p className="bilingual" style={{ margin: "2px 0 0", color: "var(--text-muted)", fontSize: 13 }}>{s.english}</p>
@@ -461,8 +467,8 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
       {grammar.vocabulary.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-title">
-            <h2>Business terminology</h2>
-            <span className="bilingual">{grammar.vocabulary.length} words, grouped by part of speech. The full list lives in the <Link to="/app/dictionary">Dictionary</Link>.</span>
+            <h2>{t("grammar.vocab.title")}</h2>
+            <span className="bilingual">{t("grammar.vocab.note", { count: grammar.vocabulary.length })} <Link to="/app/dictionary">{t("grammar.vocab.dictionary_link")}</Link>.</span>
           </div>
           {[...byPos.entries()].map(([pos, list]) => (
             <div key={pos} style={{ marginBottom: 10 }}>
@@ -471,11 +477,11 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
                 {list.slice(0, 30).map((v) => (
                   <span key={v.word} className="chip">
                     <strong className="mono">{v.word}</strong> — {v.englishMeaning || v.bengaliMeaning}
-                    {v.source === "user" && <span className="bilingual"> (yours)</span>}
+                    {v.source === "user" && <span className="bilingual"> {t("grammar.vocab.yours")}</span>}
                   </span>
                 ))}
                 {list.length > 30 && (
-                  <span className="chip bilingual">+{list.length - 30} more in the Dictionary</span>
+                  <span className="chip bilingual">{t("grammar.vocab.more_in_dictionary", { count: list.length - 30 })}</span>
                 )}
               </div>
             </div>
@@ -484,8 +490,8 @@ export function GrammarWorkspace({ workspace }: { workspace: Workspace }) {
       )}
 
       <p className="bilingual" style={{ marginTop: 16, color: "var(--text-muted)", fontSize: 13 }}>
-        {grammar.language.name} is at version {grammar.language.version}. Every rule edit above records a new version —
-        compare or restore any time from <Link to="/app/language">My Language</Link>.
+        {t("grammar.version.footer", { name: grammar.language.name, version: grammar.language.version })}{" "}
+        <Link to="/app/language">{t("app.nav.my_language")}</Link>.
       </p>
     </div>
   );

@@ -5,6 +5,7 @@ import { useBlocksAuth } from "../blocks-auth.js";
 import { loadSession } from "../lib/sso-bridge.js";
 import { isLoginConfigured } from "../lib/blocks/config.js";
 import { Button, ErrorNote, Spinner } from "../ui.js";
+import { t } from "../i18n/index.js";
 
 function AuthShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -34,7 +35,7 @@ export function Login() {
 
   if (loading || blocks.status === "loading") {
     return (
-      <AuthShell title="Sign in">
+      <AuthShell title={t("auth.signin.title")}>
         <Spinner />
       </AuthShell>
     );
@@ -44,7 +45,7 @@ export function Login() {
   const signIn = () => {
     setError(null);
     blocks.login("/app").catch((e: unknown) => {
-      setError(e instanceof Error ? e.message : "Could not start SSO sign-in.");
+      setError(e instanceof Error ? e.message : t("auth.signin.start_failed"));
     });
   };
 
@@ -59,31 +60,31 @@ export function Login() {
       setSession(me.user, me.workspaces);
       navigate(me.workspaces.length > 0 ? "/app/dashboard" : "/app/welcome", { replace: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not complete sign-in.");
+      setError(e instanceof Error ? e.message : t("auth.signin.complete_failed"));
       setBusy(false);
     }
   };
 
   return (
-    <AuthShell title="Sign in">
+    <AuthShell title={t("auth.signin.title")}>
       {blocks.status === "authenticated" ? (
         <>
           <p>
-            You are signed in to Blocks as{" "}
-            <strong>{String((blocks.claims as { email?: string } | undefined)?.email ?? "a Blocks user")}</strong>.
+            {t("auth.signin.signed_in_as")}{" "}
+            <strong>{String((blocks.claims as { email?: string } | undefined)?.email ?? t("auth.signin.fallback_user"))}</strong>.
           </p>
           <Button type="button" disabled={busy} style={{ width: "100%" }} onClick={() => void continueSession()}>
-            {busy ? "Entering…" : "Continue to the app"}
+            {busy ? t("auth.signin.entering") : t("auth.signin.continue")}
           </Button>
         </>
       ) : (
         <>
-          <p className="bilingual">Use your organisation's SELISE Blocks account; there is no separate Lexora password.</p>
+          <p className="bilingual">{t("auth.signin.sso_body")}</p>
           <Button type="button" disabled={!isLoginConfigured()} style={{ width: "100%" }} onClick={signIn}>
-            Sign in with Blocks SSO
+            {t("auth.signin.sso_button")}
           </Button>
           {!isLoginConfigured() && (
-            <ErrorNote message="SSO is not configured. Set VITE_BLOCKS_OIDC_CLIENT_ID in .env." />
+            <ErrorNote message={t("auth.signin.not_configured")} />
           )}
         </>
       )}
